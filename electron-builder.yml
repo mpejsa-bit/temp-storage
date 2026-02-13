@@ -1,0 +1,49 @@
+appId: com.ps.scope-platform
+productName: Solution Scoping Platform
+directories:
+  output: dist
+files:
+  - electron/**/*
+extraResources:
+  - from: .next/standalone
+    to: standalone
+    filter:
+      - "**/*"
+  - from: .next/static
+    to: standalone/.next/static
+    filter:
+      - "**/*"
+  - from: public
+    to: standalone/public
+    filter:
+      - "**/*"
+  - from: data/scope.db
+    to: data/scope.db
+  - from: .env
+    to: .env
+win:
+  signAndEditExecutable: false
+  target:
+    - target: nsis
+      arch:
+        - x64
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  category: public.app-category.business
+dmg:
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  installerIcon: null
+  uninstallerIcon: null

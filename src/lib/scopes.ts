@@ -1,0 +1,606 @@
+import { getDb, saveDb } from "./db";
+import { generateId, generateShareToken, getFleetSizeLabel } from "./utils";
+import { PS_FEATURES } from "./seed";
+
+export interface ScopeDocument {
+  id: string;
+  owner_id: string;
+  fleet_name: string;
+  status: string;
+  share_token: string | null;
+  share_access: string;
+  sf_opportunity_id: string | null;
+  created_at: string;
+  updated_at: string;
+  owner_name?: string;
+  owner_email?: string;
+  role?: string;
+}
+
+function rowToObj(columns: string[], values: unknown[]): Record<string, unknown> {
+  const obj: Record<string, unknown> = {};
+  columns.forEach((col, i) => (obj[col] = values[i]));
+  return obj;
+}
+
+function execToObjects(result: { columns: string[]; values: unknown[][] }[]): Record<string, unknown>[] {
+  if (!result.length) return [];
+  return result[0].values.map((row) => rowToObj(result[0].columns, row));
+}
+
+export async function createScope(ownerId: string, fleetName: string) {
+  const db = await getDb();
+  const id = generateId();
+  const now = new Date().toISOString();
+
+  db.run(
+    `INSERT INTO scope_documents (id, owner_id, fleet_name, status, created_at, updated_at)
+     VALUES (?, ?, ?, 'draft', ?, ?)`,
+    [id, ownerId, fleetName, now, now]
+  );
+
+  db.run(
+    `INSERT INTO scope_collaborators (id, scope_id, user_id, role, invited_at)
+     VALUES (?, ?, ?, 'owner', ?)`,
+    [generateId(), id, ownerId, now]
+  );
+
+  db.run(
+    `INSERT INTO fleet_overview (id, scope_id, ps_platform) VALUES (?, ?, 'PS Enterprise')`,
+    [generateId(), id]
+  );
+
+  db.run(
+    `INSERT INTO workflow_integration (id, scope_id, data_json) VALUES (?, ?, '{}')`,
+    [generateId(), id]
+  );
+
+  // Seed default features
+  PS_FEATURES.forEach((feature, i) => {
+    db.run(
+      `INSERT INTO solution_features (id, scope_id, feature_name, needed, sort_order)
+       VALUES (?, ?, ?, 0, ?)`,
+      [generateId(), id, feature, i]
+    );
+  });
+
+  // Seed install forecasts for 2025 and 2026
+  for (const year of [2025, 2026]) {
+    for (let month = 1; month <= 12; month++) {
+      db.run(
+        `INSERT INTO install_forecasts (id, scope_id, year, month, forecasted, actual)
+         VALUES (?, ?, ?, ?, 0, 0)`,
+        [generateId(), id, year, month]
+      );
+    }
+  }
+
+  // Seed default PS team contact rows
+  const psRoles = [
+    "Account Executive",
+    "Solutions Engineer",
+    "Solutions Architect Engineer",
+    "Program Manager",
+    "Customer Success Manager",
+    "Field Engineer",
+    "Implementer",
+    "Trainer",
+  ];
+  psRoles.forEach((role, i) => {
+    db.run(
+      `INSERT INTO contacts (id, scope_id, contact_type, role_title, sort_order)
+       VALUES (?, ?, 'ps_team', ?, ?)`,
+      [generateId(), id, role, i]
+    );
+  });
+
+  saveDb();
+  return id;
+}
+
+export async function listScopes(userId: string): Promise<ScopeDocument[]> {
+  const db = await getDb();
+  const result = db.exec(
+    `SELECT sd.*, sc.role, u.name as owner_name, u.email as owner_email
+     FROM scope_documents sd
+     JOIN scope_collaborators sc ON sc.scope_id = sd.id AND sc.user_id = ?
+     JOIN users u ON u.id = sd.owner_id
+     ORDER BY sd.updated_at DESC`,
+    [userId]
+  );
+  return execToObjects(result) as unknown as ScopeDocument[];
+}
+
+export async function getScope(scopeId: string) {
+  const db = await getDb();
+  const result = db.exec("SELECT * FROM scope_documents WHERE id = ?", [scopeId]);
+  const rows = execToObjects(result);
+  return rows[0] || null;
+}
+
+export async function getScopeByToken(token: string) {
+  const db = await getDb();
+  const result = db.exec(
+    "SELECT * FROM scope_documents WHERE share_token = ? AND share_access != 'disabled'",
+    [token]
+  );
+  const rows = execToObjects(result);
+  return rows[0] || null;
+}
+
+export async function getUserRole(scopeId: string, userId: string): Promise<string | null> {
+  const db = await getDb();
+  const result = db.exec(
+    "SELECT role FROM scope_collaborators WHERE scope_id = ? AND user_id = ?",
+    [scopeId, userId]
+  );
+  if (!result.length || !result[0].values.length) return null;
+  return result[0].values[0][0] as string;
+}
+
+export async function updateScope(scopeId: string, data: Record<string, unknown>) {
+  const db = await getDb();
+  const sets: string[] = [];
+  const vals: unknown[] = [];
+
+  for (const [key, val] of Object.entries(data)) {
+    sets.push(`${key} = ?`);
+    vals.push(val);
+  }
+  sets.push("updated_at = ?");
+  vals.push(new Date().toISOString());
+  vals.push(scopeId);
+
+  db.run(`UPDATE scope_documents SET ${sets.join(", ")} WHERE id = ?`, vals);
+  saveDb();
+}
+
+export async function deleteScope(scopeId: string) {
+  const db = await getDb();
+  db.run("DELETE FROM scope_documents WHERE id = ?", [scopeId]);
+  saveDb();
+}
+
+export async function cloneScope(scopeId: string, newOwnerId: string): Promise<string> {
+  const db = await getDb();
+  const scope = await getScope(scopeId);
+  if (!scope) throw new Error("Scope not found");
+
+  const newId = await createScope(
+    newOwnerId,
+    `${(scope as Record<string, unknown>).fleet_name} (Copy)`
+  );
+
+  // Copy overview
+  const overview = db.exec("SELECT * FROM fleet_overview WHERE scope_id = ?", [scopeId]);
+  if (overview.length && overview[0].values.length) {
+    const ov = rowToObj(overview[0].columns, overview[0].values[0]);
+    const cols = overview[0].columns.filter((c) => c !== "id" && c !== "scope_id");
+    const setStr = cols.map((c) => `${c} = ?`).join(", ");
+    const vals = cols.map((c) => ov[c]);
+    vals.push(newId);
+    db.run(`UPDATE fleet_overview SET ${setStr} WHERE scope_id = ?`, vals);
+  }
+
+  // Copy fleet contacts (ps_team defaults already seeded by createScope)
+  const contacts = db.exec("SELECT * FROM contacts WHERE scope_id = ? AND contact_type = 'fleet'", [scopeId]);
+  if (contacts.length) {
+    for (const row of contacts[0].values) {
+      const obj = rowToObj(contacts[0].columns, row);
+      db.run(
+        `INSERT INTO contacts (id, scope_id, contact_type, role_title, name, title, email, phone, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [generateId(), newId, obj.contact_type, obj.role_title, obj.name, obj.title, obj.email, obj.phone, obj.sort_order]
+      );
+    }
+  }
+
+  // Copy UPAs
+  const upas = db.exec("SELECT * FROM user_provided_apps WHERE scope_id = ?", [scopeId]);
+  if (upas.length) {
+    for (const row of upas[0].values) {
+      const obj = rowToObj(upas[0].columns, row);
+      db.run(
+        `INSERT INTO user_provided_apps (id, scope_id, name, use_case, apk_or_website, website_url, has_deeplink, deeplink_description, comments, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [generateId(), newId, obj.name, obj.use_case, obj.apk_or_website, obj.website_url, obj.has_deeplink, obj.deeplink_description, obj.comments, obj.sort_order]
+      );
+    }
+  }
+
+  // Copy marketplace apps
+  const mApps = db.exec("SELECT * FROM marketplace_apps WHERE scope_id = ?", [scopeId]);
+  if (mApps.length) {
+    for (const row of mApps[0].values) {
+      const obj = rowToObj(mApps[0].columns, row);
+      db.run(
+        `INSERT INTO marketplace_apps (id, scope_id, product_name, partner_account, solution_type, partner_category, partner_subcategory, description, value_proposition, stage, selected, notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [generateId(), newId, obj.product_name, obj.partner_account, obj.solution_type, obj.partner_category, obj.partner_subcategory, obj.description, obj.value_proposition, obj.stage, obj.selected, obj.notes]
+      );
+    }
+  }
+
+  // Copy solution features (delete seeded defaults first, then copy source)
+  db.run("DELETE FROM solution_features WHERE scope_id = ?", [newId]);
+  const features = db.exec("SELECT * FROM solution_features WHERE scope_id = ?", [scopeId]);
+  if (features.length) {
+    for (const row of features[0].values) {
+      const obj = rowToObj(features[0].columns, row);
+      db.run(
+        `INSERT INTO solution_features (id, scope_id, feature_name, needed, num_licenses, required_for_quote, required_for_pilot, required_for_production, notes, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [generateId(), newId, obj.feature_name, obj.needed, obj.num_licenses, obj.required_for_quote, obj.required_for_pilot, obj.required_for_production, obj.notes, obj.sort_order]
+      );
+    }
+  }
+
+  // Copy gaps
+  const gaps = db.exec("SELECT * FROM gaps WHERE scope_id = ?", [scopeId]);
+  if (gaps.length) {
+    for (const row of gaps[0].values) {
+      const obj = rowToObj(gaps[0].columns, row);
+      db.run(
+        `INSERT INTO gaps (id, scope_id, gap_number, gap_identified, use_case, bd_team_engaged, product_team_engaged, se_use_case_link, psop_ticket, customer_blocker, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [generateId(), newId, obj.gap_number, obj.gap_identified, obj.use_case, obj.bd_team_engaged, obj.product_team_engaged, obj.se_use_case_link, obj.psop_ticket, obj.customer_blocker, obj.sort_order]
+      );
+    }
+  }
+
+  // Copy workshop questions
+  const workshop = db.exec("SELECT * FROM workshop_questions WHERE scope_id = ?", [scopeId]);
+  if (workshop.length) {
+    for (const row of workshop[0].values) {
+      const obj = rowToObj(workshop[0].columns, row);
+      db.run(
+        `INSERT INTO workshop_questions (id, scope_id, sub_category, question, response, comments, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [generateId(), newId, obj.sub_category, obj.question, obj.response, obj.comments, obj.sort_order]
+      );
+    }
+  }
+
+  // Copy training questions
+  const training = db.exec("SELECT * FROM training_questions WHERE scope_id = ?", [scopeId]);
+  if (training.length) {
+    for (const row of training[0].values) {
+      const obj = rowToObj(training[0].columns, row);
+      db.run(
+        `INSERT INTO training_questions (id, scope_id, training_type, training_personnel, sub_category, question, response, comments, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [generateId(), newId, obj.training_type, obj.training_personnel, obj.sub_category, obj.question, obj.response, obj.comments, obj.sort_order]
+      );
+    }
+  }
+
+  // Copy forms
+  const forms = db.exec("SELECT * FROM scope_forms WHERE scope_id = ?", [scopeId]);
+  if (forms.length) {
+    for (const row of forms[0].values) {
+      const obj = rowToObj(forms[0].columns, row);
+      db.run(
+        `INSERT INTO scope_forms (id, scope_id, form_number, form_name, purpose, used_in_workflow, driver_or_dispatch, driver_response_expected, form_category, decision_tree_logic, stored_procedures, stored_procedure_desc, form_type, form_fields, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [generateId(), newId, obj.form_number, obj.form_name, obj.purpose, obj.used_in_workflow, obj.driver_or_dispatch, obj.driver_response_expected, obj.form_category, obj.decision_tree_logic, obj.stored_procedures, obj.stored_procedure_desc, obj.form_type, obj.form_fields, obj.sort_order]
+      );
+    }
+  }
+
+  // Copy install forecasts (delete seeded defaults first, then copy source)
+  db.run("DELETE FROM install_forecasts WHERE scope_id = ?", [newId]);
+  const forecasts = db.exec("SELECT * FROM install_forecasts WHERE scope_id = ?", [scopeId]);
+  if (forecasts.length) {
+    for (const row of forecasts[0].values) {
+      const obj = rowToObj(forecasts[0].columns, row);
+      db.run(
+        `INSERT INTO install_forecasts (id, scope_id, year, month, forecasted, actual)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [generateId(), newId, obj.year, obj.month, obj.forecasted, obj.actual]
+      );
+    }
+  }
+
+  // Copy workflow integration
+  const wfInt = db.exec("SELECT * FROM workflow_integration WHERE scope_id = ?", [scopeId]);
+  if (wfInt.length && wfInt[0].values.length) {
+    const obj = rowToObj(wfInt[0].columns, wfInt[0].values[0]);
+    db.run("UPDATE workflow_integration SET data_json = ? WHERE scope_id = ?", [obj.data_json, newId]);
+  }
+
+  // Copy workflow technical
+  const wfTech = db.exec("SELECT * FROM workflow_technical WHERE scope_id = ?", [scopeId]);
+  if (wfTech.length && wfTech[0].values.length) {
+    const obj = rowToObj(wfTech[0].columns, wfTech[0].values[0]);
+    const cols = wfTech[0].columns.filter((c) => c !== "id" && c !== "scope_id");
+    if (cols.length) {
+      const id = generateId();
+      db.run("INSERT OR REPLACE INTO workflow_technical (id, scope_id) VALUES (?, ?)", [id, newId]);
+      const setStr = cols.map((c) => `${c} = ?`).join(", ");
+      const vals = cols.map((c) => obj[c]);
+      vals.push(newId);
+      db.run(`UPDATE workflow_technical SET ${setStr} WHERE scope_id = ?`, vals);
+    }
+  }
+
+  saveDb();
+  return newId;
+}
+
+export async function enableSharing(scopeId: string) {
+  const db = await getDb();
+  const token = generateShareToken();
+  db.run(
+    "UPDATE scope_documents SET share_token = ?, share_access = 'viewer', updated_at = ? WHERE id = ?",
+    [token, new Date().toISOString(), scopeId]
+  );
+  saveDb();
+  return token;
+}
+
+export async function disableSharing(scopeId: string) {
+  const db = await getDb();
+  db.run(
+    "UPDATE scope_documents SET share_access = 'disabled', updated_at = ? WHERE id = ?",
+    [new Date().toISOString(), scopeId]
+  );
+  saveDb();
+}
+
+export async function getOverview(scopeId: string) {
+  const db = await getDb();
+  const result = db.exec("SELECT * FROM fleet_overview WHERE scope_id = ?", [scopeId]);
+  return execToObjects(result)[0] || null;
+}
+
+export async function updateOverview(scopeId: string, data: Record<string, unknown>) {
+  const db = await getDb();
+  const sets: string[] = [];
+  const vals: unknown[] = [];
+  for (const [key, val] of Object.entries(data)) {
+    if (key === "id" || key === "scope_id" || key === "fleet_name" || key === "fleet_size_label") continue;
+    sets.push(`${key} = ?`);
+    vals.push(val);
+  }
+  if (!sets.length) return;
+  vals.push(scopeId);
+  db.run(`UPDATE fleet_overview SET ${sets.join(", ")} WHERE scope_id = ?`, vals);
+
+  // Update fleet_name on scope_documents if fleet name changed via overview
+  if (data.fleet_name) {
+    db.run("UPDATE scope_documents SET fleet_name = ?, updated_at = ? WHERE id = ?", [
+      data.fleet_name,
+      new Date().toISOString(),
+      scopeId,
+    ]);
+  }
+
+  // Compute fleet size label
+  if (data.num_tractors !== undefined) {
+    const label = getFleetSizeLabel(data.num_tractors as number);
+    db.run("UPDATE fleet_overview SET fleet_size_label = ? WHERE scope_id = ?", [label, scopeId]);
+  }
+
+  saveDb();
+}
+
+export async function getContacts(scopeId: string) {
+  const db = await getDb();
+  return execToObjects(
+    db.exec("SELECT * FROM contacts WHERE scope_id = ? ORDER BY contact_type, sort_order", [scopeId])
+  );
+}
+
+export async function getMarketplaceApps(scopeId: string) {
+  const db = await getDb();
+  return execToObjects(
+    db.exec("SELECT * FROM marketplace_apps WHERE scope_id = ? ORDER BY product_name", [scopeId])
+  );
+}
+
+export async function getUPAs(scopeId: string) {
+  const db = await getDb();
+  return execToObjects(
+    db.exec("SELECT * FROM user_provided_apps WHERE scope_id = ? ORDER BY sort_order", [scopeId])
+  );
+}
+
+export async function getFeatures(scopeId: string) {
+  const db = await getDb();
+  return execToObjects(
+    db.exec("SELECT * FROM solution_features WHERE scope_id = ? ORDER BY sort_order", [scopeId])
+  );
+}
+
+export async function getGaps(scopeId: string) {
+  const db = await getDb();
+  return execToObjects(
+    db.exec("SELECT * FROM gaps WHERE scope_id = ? ORDER BY sort_order", [scopeId])
+  );
+}
+
+export async function getTrainingQuestions(scopeId: string) {
+  const db = await getDb();
+  return execToObjects(
+    db.exec("SELECT * FROM training_questions WHERE scope_id = ? ORDER BY sort_order", [scopeId])
+  );
+}
+
+export async function getWorkflowTechnical(scopeId: string) {
+  const db = await getDb();
+  const rows = execToObjects(
+    db.exec("SELECT * FROM workflow_technical WHERE scope_id = ?", [scopeId])
+  );
+  return rows[0] || null;
+}
+
+export async function upsertWorkflowTechnical(scopeId: string, data: Record<string, unknown>) {
+  const db = await getDb();
+  const existing = db.exec("SELECT id FROM workflow_technical WHERE scope_id = ?", [scopeId]);
+  if (existing.length && existing[0].values.length) {
+    const sets: string[] = [];
+    const vals: unknown[] = [];
+    for (const [key, val] of Object.entries(data)) {
+      if (key === "id" || key === "scope_id") continue;
+      sets.push(`${key} = ?`);
+      vals.push(val);
+    }
+    if (sets.length) {
+      vals.push(scopeId);
+      db.run(`UPDATE workflow_technical SET ${sets.join(", ")} WHERE scope_id = ?`, vals);
+    }
+  } else {
+    const id = generateId();
+    db.run("INSERT INTO workflow_technical (id, scope_id) VALUES (?, ?)", [id, scopeId]);
+    const sets: string[] = [];
+    const vals: unknown[] = [];
+    for (const [key, val] of Object.entries(data)) {
+      if (key === "id" || key === "scope_id") continue;
+      sets.push(`${key} = ?`);
+      vals.push(val);
+    }
+    if (sets.length) {
+      vals.push(scopeId);
+      db.run(`UPDATE workflow_technical SET ${sets.join(", ")} WHERE scope_id = ?`, vals);
+    }
+  }
+  saveDb();
+}
+
+export async function getForms(scopeId: string) {
+  const db = await getDb();
+  return execToObjects(
+    db.exec("SELECT * FROM scope_forms WHERE scope_id = ? ORDER BY sort_order", [scopeId])
+  );
+}
+
+export async function getWorkflow(scopeId: string) {
+  const db = await getDb();
+  const rows = execToObjects(
+    db.exec("SELECT * FROM workflow_integration WHERE scope_id = ?", [scopeId])
+  );
+  return rows[0] || null;
+}
+
+export async function getForecasts(scopeId: string) {
+  const db = await getDb();
+  return execToObjects(
+    db.exec("SELECT * FROM install_forecasts WHERE scope_id = ? ORDER BY year, month", [scopeId])
+  );
+}
+
+export async function getWorkshopQuestions(scopeId: string) {
+  const db = await getDb();
+  return execToObjects(
+    db.exec("SELECT * FROM workshop_questions WHERE scope_id = ? ORDER BY sort_order", [scopeId])
+  );
+}
+
+export async function getCollaborators(scopeId: string) {
+  const db = await getDb();
+  return execToObjects(
+    db.exec(
+      `SELECT sc.*, u.name, u.email FROM scope_collaborators sc
+       JOIN users u ON u.id = sc.user_id
+       WHERE sc.scope_id = ? ORDER BY sc.role`,
+      [scopeId]
+    )
+  );
+}
+
+export async function addCollaborator(scopeId: string, email: string, role: string) {
+  const db = await getDb();
+  const userResult = db.exec("SELECT id FROM users WHERE email = ?", [email]);
+  if (!userResult.length || !userResult[0].values.length) {
+    throw new Error("User not found");
+  }
+  const userId = userResult[0].values[0][0] as string;
+  db.run(
+    `INSERT OR REPLACE INTO scope_collaborators (id, scope_id, user_id, role, invited_at)
+     VALUES (?, ?, ?, ?, ?)`,
+    [generateId(), scopeId, userId, role, new Date().toISOString()]
+  );
+  saveDb();
+}
+
+export async function removeCollaborator(scopeId: string, userId: string) {
+  const db = await getDb();
+  db.run("DELETE FROM scope_collaborators WHERE scope_id = ? AND user_id = ? AND role != 'owner'", [
+    scopeId,
+    userId,
+  ]);
+  saveDb();
+}
+
+export async function getScopeStats(scopeId: string) {
+  const db = await getDb();
+  const apps = db.exec("SELECT COUNT(*) FROM marketplace_apps WHERE scope_id = ? AND selected = 1", [scopeId]);
+  const upas = db.exec("SELECT COUNT(*) FROM user_provided_apps WHERE scope_id = ?", [scopeId]);
+  const forms = db.exec("SELECT COUNT(*) FROM scope_forms WHERE scope_id = ?", [scopeId]);
+  const gaps = db.exec("SELECT COUNT(*) FROM gaps WHERE scope_id = ? AND gap_identified IS NOT NULL", [scopeId]);
+  const features = db.exec("SELECT COUNT(*) FROM solution_features WHERE scope_id = ? AND needed = 1", [scopeId]);
+
+  // Form category breakdown (Stats!B6:B12 = COUNTIF)
+  const catRows = db.exec(
+    "SELECT form_category, COUNT(*) as cnt FROM scope_forms WHERE scope_id = ? GROUP BY form_category",
+    [scopeId]
+  );
+  const form_categories: Record<string, number> = {};
+  if (catRows.length && catRows[0].values) {
+    for (const row of catRows[0].values) {
+      form_categories[row[0] as string || "Uncategorized"] = row[1] as number;
+    }
+  }
+
+  return {
+    marketplace_apps: apps.length ? (apps[0].values[0][0] as number) : 0,
+    upas: upas.length ? (upas[0].values[0][0] as number) : 0,
+    forms: forms.length ? (forms[0].values[0][0] as number) : 0,
+    gaps: gaps.length ? (gaps[0].values[0][0] as number) : 0,
+    features_needed: features.length ? (features[0].values[0][0] as number) : 0,
+    form_categories,
+  };
+}
+
+export async function getRefMarketplaceProducts() {
+  const db = await getDb();
+  return execToObjects(db.exec("SELECT * FROM ref_marketplace_products ORDER BY product_name"));
+}
+
+export async function getRefMasterData(category?: string) {
+  const db = await getDb();
+  if (category) {
+    return execToObjects(
+      db.exec("SELECT * FROM ref_master_data WHERE category = ? ORDER BY sort_order", [category])
+    );
+  }
+  return execToObjects(db.exec("SELECT * FROM ref_master_data ORDER BY category, sort_order"));
+}
+
+// Generic table update helper
+export async function upsertRow(table: string, data: Record<string, unknown>) {
+  const db = await getDb();
+  const id = (data.id as string) || generateId();
+  const cols = Object.keys(data).filter((k) => k !== "id");
+  const placeholders = cols.map(() => "?").join(", ");
+  const values = cols.map((k) => data[k]);
+
+  // Try update first
+  if (data.id) {
+    const sets = cols.map((c) => `${c} = ?`).join(", ");
+    db.run(`UPDATE ${table} SET ${sets} WHERE id = ?`, [...values, id]);
+  } else {
+    db.run(
+      `INSERT INTO ${table} (id, ${cols.join(", ")}) VALUES (?, ${placeholders})`,
+      [id, ...values]
+    );
+  }
+  saveDb();
+  return id;
+}
+
+export async function deleteRow(table: string, id: string) {
+  const db = await getDb();
+  db.run(`DELETE FROM ${table} WHERE id = ?`, [id]);
+  saveDb();
+}
