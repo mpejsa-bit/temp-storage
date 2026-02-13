@@ -100,7 +100,7 @@ export default function WorkshopTab({ data, canEdit, onSave }) {
 
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm text-[#64748b]">
+          <p className="text-sm text-[var(--text-muted)]">
             Presale workshop questions with responses. Fleet name{" "}
             <span className="text-cyan-400 font-mono text-xs">({fleet})</span>{" "}
             is auto-inserted into question text.
@@ -128,10 +128,10 @@ export default function WorkshopTab({ data, canEdit, onSave }) {
       </div>
 
       {questions.length === 0 ? (
-        <div className="text-center py-16 bg-[#111827] border border-[#2a3a55] rounded-xl">
+        <div className="text-center py-16 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl">
           <MessageSquare className="w-12 h-12 text-[#2a3a55] mx-auto mb-4"/>
-          <p className="text-[#4a5568] text-sm mb-2">No workshop questions yet.</p>
-          <p className="text-[#4a5568] text-xs">Click the green button above to populate with the standard 20-question set.</p>
+          <p className="text-[var(--text-muted)] text-sm mb-2">No workshop questions yet.</p>
+          <p className="text-[var(--text-muted)] text-xs">Click the green button above to populate with the standard 20-question set.</p>
         </div>
       ) : (
         <div className="space-y-6">
@@ -140,22 +140,22 @@ export default function WorkshopTab({ data, canEdit, onSave }) {
               <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-3 flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-400"/>
                 {cat}
-                <span className="text-[#4a5568] font-normal lowercase">({catQuestions.length} questions)</span>
+                <span className="text-[var(--text-muted)] font-normal lowercase">({catQuestions.length} questions)</span>
               </h3>
               <div className="space-y-2">
                 {catQuestions.map(q => (
-                  <div key={q.id} className="bg-[#111827] border border-[#2a3a55] rounded-lg p-4 hover:border-[#3a4a65] transition">
+                  <div key={q.id} className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg p-4 hover:border-[#3a4a65] transition">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
                         {canEdit ? (
                           <input
-                            className="w-full bg-transparent text-white text-sm font-medium focus:outline-none border-b border-transparent focus:border-blue-500/50 pb-1 transition"
+                            className="w-full bg-transparent text-[var(--text)] text-sm font-medium focus:outline-none border-b border-transparent focus:border-blue-500/50 pb-1 transition"
                             value={q.question || ""}
                             onChange={e => updateQuestion(q, "question", e.target.value)}
                             placeholder="Enter question..."
                           />
                         ) : (
-                          <p className="text-sm text-white font-medium">{q.question}</p>
+                          <p className="text-sm text-[var(--text)] font-medium">{q.question}</p>
                         )}
 
                         {q.question?.includes(fleet) && (
@@ -165,9 +165,9 @@ export default function WorkshopTab({ data, canEdit, onSave }) {
                         )}
 
                         <div className="mt-3">
-                          <label className="text-[10px] text-[#64748b] uppercase tracking-wider">Response</label>
+                          <label className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">Response</label>
                           <textarea
-                            className="w-full mt-1 px-3 py-2 bg-[#0a0e17] border border-[#2a3a55] rounded-lg text-white text-sm focus:outline-none focus:border-blue-500 transition disabled:opacity-50 resize-y"
+                            className="w-full mt-1 px-3 py-2 bg-[var(--bg)] border border-[var(--border)] rounded-lg text-[var(--text)] text-sm focus:outline-none focus:border-blue-500 transition disabled:opacity-50 resize-y"
                             rows={2}
                             value={q.response || ""}
                             onChange={e => updateQuestion(q, "response", e.target.value)}
@@ -193,7 +193,7 @@ export default function WorkshopTab({ data, canEdit, onSave }) {
         </div>
       )}
 
-      <div className="text-[10px] text-[#4a5568] border-t border-[#2a3a55]/30 pt-3">
+      <div className="text-[10px] text-[var(--text-muted)] border-t border-[var(--border)]/30 pt-3">
         {questions.length} questions total across {Object.keys(grouped).length} categories
       </div>
     </div>

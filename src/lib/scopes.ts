@@ -98,6 +98,87 @@ export async function createScope(ownerId: string, fleetName: string) {
   return id;
 }
 
+export interface SfPrePopulateData {
+  sf_account_id?: string;
+  hq_location?: string;
+  company_website?: string;
+  type_of_company?: string;
+  account_executive?: string;
+  sf_opportunity_link?: string;
+  executive_sponsor_name?: string;
+  executive_sponsor_title?: string;
+  contacts?: Array<{
+    name: string;
+    title: string;
+    email: string;
+    phone: string;
+    role_title: string;
+  }>;
+}
+
+export async function createScopeWithSfData(
+  ownerId: string,
+  fleetName: string,
+  sfData: SfPrePopulateData
+) {
+  // Create scope with all defaults first
+  const id = await createScope(ownerId, fleetName);
+  const db = await getDb();
+
+  // Update fleet_overview with SF data
+  const overviewUpdates: string[] = [];
+  const overviewVals: unknown[] = [];
+
+  const overviewFields: Record<string, unknown> = {
+    fleet_name: fleetName,
+    hq_location: sfData.hq_location,
+    company_website: sfData.company_website,
+    type_of_company: sfData.type_of_company,
+    account_executive: sfData.account_executive,
+    sf_opportunity_link: sfData.sf_opportunity_link,
+    executive_sponsor_name: sfData.executive_sponsor_name,
+    executive_sponsor_title: sfData.executive_sponsor_title,
+  };
+
+  for (const [key, val] of Object.entries(overviewFields)) {
+    if (val !== undefined && val !== null && val !== "") {
+      overviewUpdates.push(`${key} = ?`);
+      overviewVals.push(val);
+    }
+  }
+
+  if (overviewUpdates.length) {
+    overviewVals.push(id);
+    db.run(
+      `UPDATE fleet_overview SET ${overviewUpdates.join(", ")} WHERE scope_id = ?`,
+      overviewVals
+    );
+  }
+
+  // Update scope_documents with SF account ID
+  if (sfData.sf_account_id) {
+    db.run(
+      "UPDATE scope_documents SET sf_opportunity_id = ? WHERE id = ?",
+      [sfData.sf_account_id, id]
+    );
+  }
+
+  // Insert fleet contacts from Salesforce
+  if (sfData.contacts && sfData.contacts.length > 0) {
+    for (let i = 0; i < sfData.contacts.length; i++) {
+      const c = sfData.contacts[i];
+      db.run(
+        `INSERT INTO contacts (id, scope_id, contact_type, role_title, name, title, email, phone, sort_order)
+         VALUES (?, ?, 'fleet', ?, ?, ?, ?, ?, ?)`,
+        [generateId(), id, c.role_title || c.title || "", c.name, c.title, c.email, c.phone, i]
+      );
+    }
+  }
+
+  saveDb();
+  return id;
+}
+
 export async function listScopes(userId: string): Promise<ScopeDocument[]> {
   const db = await getDb();
   const result = db.exec(

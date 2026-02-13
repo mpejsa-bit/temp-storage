@@ -49,18 +49,18 @@ export default function WorkflowTab({ data, canEdit, onSave }) {
   const updateField = (key, val) => setTechFields((prev) => ({ ...prev, [key]: val }));
 
   const TechInput = ({ label, field, type = "text" }) => (
-    <div className="flex items-center justify-between py-1.5 border-b border-[#2a3a55]/20">
-      <span className="text-[#64748b] text-xs">{label}</span>
+    <div className="flex items-center justify-between py-1.5 border-b border-[var(--border)]/20">
+      <span className="text-[var(--text-muted)] text-xs">{label}</span>
       {editing ? (
         <input
           type={type}
           value={techFields[field] || ""}
           onChange={(e) => updateField(field, e.target.value)}
-          className="bg-[#0a0e17] border border-[#2a3a55] rounded px-2 py-0.5 text-xs text-white font-mono w-48 focus:border-blue-500 focus:outline-none"
+          className="bg-[var(--bg)] border border-[var(--border)] rounded px-2 py-0.5 text-xs text-[var(--text)] font-mono w-48 focus:border-blue-500 focus:outline-none"
           placeholder="—"
         />
       ) : (
-        <span className="text-white font-mono text-xs">
+        <span className="text-[var(--text)] font-mono text-xs">
           {type === "password" && wt[field] ? "••••••••" : wt[field] || "—"}
         </span>
       )}
@@ -80,7 +80,7 @@ export default function WorkflowTab({ data, canEdit, onSave }) {
 
       <div className="grid grid-cols-2 gap-6">
         {/* Left column: Fleet Info */}
-        <div className="bg-[#111827] border border-[#2a3a55] rounded-xl p-5">
+        <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-5">
           <h3 className="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-4">Fleet Information</h3>
           <LinkedField label="Fleet Name" value={data.fleet_name} sourceTab="Overview!B2"/>
           <LinkedField label="Number of Drivers" value={ov.num_drivers} sourceTab="Overview!B10"/>
@@ -94,7 +94,7 @@ export default function WorkflowTab({ data, canEdit, onSave }) {
         </div>
 
         {/* Right column: TMS & Telematics */}
-        <div className="bg-[#111827] border border-[#2a3a55] rounded-xl p-5">
+        <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-5">
           <h3 className="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-4">TMS & Telematics</h3>
           <div className="grid grid-cols-2 gap-x-4">
             <div>
@@ -118,7 +118,7 @@ export default function WorkflowTab({ data, canEdit, onSave }) {
               <LinkedField label="Systems Integrator" value={ov.systems_integrator_future} sourceTab="Overview!D36"/>
             </div>
           </div>
-          <div className="mt-3 pt-3 border-t border-[#2a3a55]/30">
+          <div className="mt-3 pt-3 border-t border-[var(--border)]/30">
             <LinkedField label="Other Hardware Used" value={ov.other_hardware_used} sourceTab="Overview!B37"/>
             <LinkedField label="Other Hardware Needed" value={ov.other_hardware_needed} sourceTab="Overview!D37"/>
           </div>
@@ -126,7 +126,7 @@ export default function WorkflowTab({ data, canEdit, onSave }) {
       </div>
 
       {/* Other Technology Grid */}
-      <div className="bg-[#111827] border border-[#2a3a55] rounded-xl p-5">
+      <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-5">
         <h3 className="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-4">Other Technology Applications</h3>
         <div className="grid grid-cols-4 gap-4">
           {[
@@ -145,7 +145,7 @@ export default function WorkflowTab({ data, canEdit, onSave }) {
       </div>
 
       {/* Form category counts */}
-      <div className="bg-[#111827] border border-[#2a3a55] rounded-xl p-5">
+      <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-5">
         <h3 className="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-4">Form Category Breakdown</h3>
         <div className="grid grid-cols-3 gap-3">
           {[
@@ -156,9 +156,9 @@ export default function WorkflowTab({ data, canEdit, onSave }) {
             ["Terminal", data.stats?.form_categories?.["Terminal"] || 0],
             ["Border Crossing", data.stats?.form_categories?.["Border Crossing"] || 0],
           ].map(([label, count]) => (
-            <div key={label} className="flex justify-between py-1.5 border-b border-[#2a3a55]/30">
-              <span className="text-[#64748b] text-sm">{label}</span>
-              <span className="text-white font-medium text-sm">{count}</span>
+            <div key={label} className="flex justify-between py-1.5 border-b border-[var(--border)]/30">
+              <span className="text-[var(--text-muted)] text-sm">{label}</span>
+              <span className="text-[var(--text)] font-medium text-sm">{count}</span>
             </div>
           ))}
         </div>
@@ -166,7 +166,7 @@ export default function WorkflowTab({ data, canEdit, onSave }) {
       </div>
 
       {/* Technical Info — Editable */}
-      <div className="bg-[#111827] border border-[#2a3a55] rounded-xl p-5">
+      <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xs font-semibold text-rose-400 uppercase tracking-wider">PS Enterprise Workflow Requirements</h3>
           {canEdit && !editing && (
@@ -179,7 +179,7 @@ export default function WorkflowTab({ data, canEdit, onSave }) {
               <button onClick={saveTech} className="flex items-center gap-1.5 px-3 py-1 text-xs bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-600/30 transition-colors">
                 <Save size={12}/> Save
               </button>
-              <button onClick={() => setEditing(false)} className="flex items-center gap-1.5 px-3 py-1 text-xs bg-[#1a2234] text-[#94a3b8] border border-[#2a3a55] rounded-lg hover:bg-[#1e2840] transition-colors">
+              <button onClick={() => setEditing(false)} className="flex items-center gap-1.5 px-3 py-1 text-xs bg-[var(--bg-card)] text-[var(--text-secondary)] border border-[var(--border)] rounded-lg hover:bg-[#1e2840] transition-colors">
                 <X size={12}/> Cancel
               </button>
             </div>
@@ -187,7 +187,7 @@ export default function WorkflowTab({ data, canEdit, onSave }) {
         </div>
 
         <div className="grid grid-cols-2 gap-x-8 text-xs mb-6">
-          <div className="font-semibold text-[#94a3b8] col-span-2 mb-1">Technical Information</div>
+          <div className="font-semibold text-[var(--text-secondary)] col-span-2 mb-1">Technical Information</div>
           <TechInput label="Hostname (Prod)" field="pse_hostname_prod"/>
           <TechInput label="Hostname (Dev)" field="pse_hostname_dev"/>
           <TechInput label="Database Name (Prod)" field="pse_db_name_prod"/>
@@ -200,7 +200,7 @@ export default function WorkflowTab({ data, canEdit, onSave }) {
           <TechInput label="TM-Password" field="pse_tm_password" type="password"/>
           <TechInput label="TMS Name" field="pse_tms_name"/>
 
-          <div className="font-semibold text-[#94a3b8] col-span-2 mt-3 mb-1">TMS Database</div>
+          <div className="font-semibold text-[var(--text-secondary)] col-span-2 mt-3 mb-1">TMS Database</div>
           <TechInput label="Access Level" field="tms_access_level"/>
           <TechInput label="IP Address" field="tms_ip_address"/>
           <TechInput label="Username" field="tms_username"/>

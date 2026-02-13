@@ -25,13 +25,13 @@ export function SFLookupTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-[#94a3b8] uppercase tracking-wider">Marketplace SF Lookup</h3>
-          <p className="text-xs text-[#64748b] mt-1">Salesforce product catalog — {data.length} products. Used by Marketplace & UPAs tab for VLOOKUP validation.</p>
+          <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Marketplace SF Lookup</h3>
+          <p className="text-xs text-[var(--text-muted)] mt-1">Salesforce product catalog — {data.length} products. Used by Marketplace & UPAs tab for VLOOKUP validation.</p>
         </div>
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#64748b]"/>
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]"/>
           <input
-            className="pl-9 pr-4 py-2 bg-[#111827] border border-[#2a3a55] rounded-lg text-white text-sm focus:outline-none focus:border-blue-500 w-64"
+            className="pl-9 pr-4 py-2 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-[var(--text)] text-sm focus:outline-none focus:border-blue-500 w-64"
             placeholder="Search products, partners, categories..."
             value={search}
             onChange={e => setSearch(e.target.value)}
@@ -44,7 +44,7 @@ export function SFLookupTab() {
         {categories.map(c => {
           const count = data.filter(d => d.partner_category === c).length;
           return (
-            <button key={c} onClick={() => setSearch(c)} className={`text-[10px] px-2 py-1 rounded-full border transition ${search === c ? 'bg-blue-500/20 border-blue-500/40 text-blue-400' : 'bg-[#111827] border-[#2a3a55] text-[#64748b] hover:text-white'}`}>
+            <button key={c} onClick={() => setSearch(c)} className={`text-[10px] px-2 py-1 rounded-full border transition ${search === c ? 'bg-blue-500/20 border-blue-500/40 text-blue-400' : 'bg-[var(--bg-secondary)] border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)]'}`}>
               {c} ({count})
             </button>
           );
@@ -52,25 +52,25 @@ export function SFLookupTab() {
       </div>
 
       {loading ? (
-        <div className="text-center py-12 text-[#4a5568]">Loading...</div>
+        <div className="text-center py-12 text-[var(--text-muted)]">Loading...</div>
       ) : (
-        <div className="bg-[#111827] border border-[#2a3a55] rounded-xl overflow-auto max-h-[600px]">
+        <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl overflow-auto max-h-[600px]">
           <table className="w-full text-sm">
             <thead className="sticky top-0 z-10">
-              <tr className="bg-[#1e3a5f]/80">
-                <th className="text-left px-4 py-3 text-xs text-[#94a3b8] font-semibold">Product Name</th>
-                <th className="text-left px-4 py-3 text-xs text-[#94a3b8] font-semibold">Partner Account</th>
-                <th className="text-left px-4 py-3 text-xs text-[#94a3b8] font-semibold">Solution Type</th>
-                <th className="text-left px-4 py-3 text-xs text-[#94a3b8] font-semibold">Category</th>
-                <th className="text-left px-4 py-3 text-xs text-[#94a3b8] font-semibold">Subcategory</th>
-                <th className="text-left px-4 py-3 text-xs text-[#94a3b8] font-semibold">Stage</th>
+              <tr className="bg-blue-500/20/80">
+                <th className="text-left px-4 py-3 text-xs text-[var(--text-secondary)] font-semibold">Product Name</th>
+                <th className="text-left px-4 py-3 text-xs text-[var(--text-secondary)] font-semibold">Partner Account</th>
+                <th className="text-left px-4 py-3 text-xs text-[var(--text-secondary)] font-semibold">Solution Type</th>
+                <th className="text-left px-4 py-3 text-xs text-[var(--text-secondary)] font-semibold">Category</th>
+                <th className="text-left px-4 py-3 text-xs text-[var(--text-secondary)] font-semibold">Subcategory</th>
+                <th className="text-left px-4 py-3 text-xs text-[var(--text-secondary)] font-semibold">Stage</th>
               </tr>
             </thead>
             <tbody>
               {data.map((p, i) => (
-                <tr key={p.id || i} className="border-t border-[#2a3a55]/30 hover:bg-[#1a2234] group" title={p.product_description || ""}>
-                  <td className="px-4 py-2.5 text-white font-medium">{p.product_name}</td>
-                  <td className="px-4 py-2.5 text-[#94a3b8]">{p.partner_account}</td>
+                <tr key={p.id || i} className="border-t border-[var(--border)]/30 hover:bg-[var(--bg-card)] group" title={p.product_description || ""}>
+                  <td className="px-4 py-2.5 text-[var(--text)] font-medium">{p.product_name}</td>
+                  <td className="px-4 py-2.5 text-[var(--text-secondary)]">{p.partner_account}</td>
                   <td className="px-4 py-2.5">
                     <div className="flex flex-wrap gap-1">
                       {(p.solution_type || "").split(";").map((t, j) => (
@@ -79,7 +79,7 @@ export function SFLookupTab() {
                     </div>
                   </td>
                   <td className="px-4 py-2.5 text-cyan-400 text-xs font-medium">{p.partner_category}</td>
-                  <td className="px-4 py-2.5 text-[#64748b] text-xs">{p.partner_subcategory}</td>
+                  <td className="px-4 py-2.5 text-[var(--text-muted)] text-xs">{p.partner_subcategory}</td>
                   <td className="px-4 py-2.5">
                     <span className={`text-[10px] px-2 py-0.5 rounded-full ${
                       p.stage === 'In Production' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15' :
@@ -95,7 +95,7 @@ export function SFLookupTab() {
       )}
 
       {/* Expanded row detail on hover would go here — for now descriptions show as title tooltip */}
-      <p className="text-[10px] text-[#4a5568]">Hover over a product name to see its description. This table validates marketplace app selections via VLOOKUP.</p>
+      <p className="text-[10px] text-[var(--text-muted)]">Hover over a product name to see its description. This table validates marketplace app selections via VLOOKUP.</p>
     </div>
   );
 }
@@ -124,13 +124,13 @@ export function KMLookupTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-[#94a3b8] uppercase tracking-wider">KM Marketplace Lookup</h3>
-          <p className="text-xs text-[#64748b] mt-1">Knowledge Management app catalog — {data.length} apps. Provides descriptions and categories for marketplace app selections.</p>
+          <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider">KM Marketplace Lookup</h3>
+          <p className="text-xs text-[var(--text-muted)] mt-1">Knowledge Management app catalog — {data.length} apps. Provides descriptions and categories for marketplace app selections.</p>
         </div>
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#64748b]"/>
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]"/>
           <input
-            className="pl-9 pr-4 py-2 bg-[#111827] border border-[#2a3a55] rounded-lg text-white text-sm focus:outline-none focus:border-blue-500 w-64"
+            className="pl-9 pr-4 py-2 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-[var(--text)] text-sm focus:outline-none focus:border-blue-500 w-64"
             placeholder="Search apps or categories..."
             value={search}
             onChange={e => setSearch(e.target.value)}
@@ -142,7 +142,7 @@ export function KMLookupTab() {
         {categories.map(c => {
           const count = data.filter(d => d.category === c).length;
           return (
-            <button key={c} onClick={() => setSearch(c)} className={`text-[10px] px-2 py-1 rounded-full border transition ${search === c ? 'bg-blue-500/20 border-blue-500/40 text-blue-400' : 'bg-[#111827] border-[#2a3a55] text-[#64748b] hover:text-white'}`}>
+            <button key={c} onClick={() => setSearch(c)} className={`text-[10px] px-2 py-1 rounded-full border transition ${search === c ? 'bg-blue-500/20 border-blue-500/40 text-blue-400' : 'bg-[var(--bg-secondary)] border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)]'}`}>
               {c} ({count})
             </button>
           );
@@ -150,23 +150,23 @@ export function KMLookupTab() {
       </div>
 
       {loading ? (
-        <div className="text-center py-12 text-[#4a5568]">Loading...</div>
+        <div className="text-center py-12 text-[var(--text-muted)]">Loading...</div>
       ) : (
         <div className="space-y-2">
           {data.map((a, i) => (
             <div key={a.id || i}
-              className="bg-[#111827] border border-[#2a3a55] rounded-lg p-4 hover:border-blue-500/30 transition cursor-pointer"
+              className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg p-4 hover:border-blue-500/30 transition cursor-pointer"
               onClick={() => setExpanded(expanded === i ? null : i)}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <span className="text-white font-medium text-sm">{a.app_name}</span>
+                  <span className="text-[var(--text)] font-medium text-sm">{a.app_name}</span>
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/15">{a.category}</span>
                 </div>
-                <span className="text-[10px] text-[#4a5568]">{expanded === i ? "▼" : "▶"}</span>
+                <span className="text-[10px] text-[var(--text-muted)]">{expanded === i ? "▼" : "▶"}</span>
               </div>
               {expanded === i && a.description && (
-                <p className="mt-3 text-sm text-[#94a3b8] leading-relaxed border-t border-[#2a3a55]/30 pt-3">{a.description}</p>
+                <p className="mt-3 text-sm text-[var(--text-secondary)] leading-relaxed border-t border-[var(--border)]/30 pt-3">{a.description}</p>
               )}
             </div>
           ))}

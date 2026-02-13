@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { createScope, listScopes } from "@/lib/scopes";
+import { createScope, createScopeWithSfData, listScopes } from "@/lib/scopes";
 import { seedDatabase } from "@/lib/seed";
 
 export async function GET() {
@@ -17,7 +17,12 @@ export async function POST(req: Request) {
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   await seedDatabase();
-  const { fleet_name } = await req.json();
-  const id = await createScope(session.user.id, fleet_name || "New Fleet");
+  const { fleet_name, sf_data } = await req.json();
+  let id: string;
+  if (sf_data) {
+    id = await createScopeWithSfData(session.user.id, fleet_name || "New Fleet", sf_data);
+  } else {
+    id = await createScope(session.user.id, fleet_name || "New Fleet");
+  }
   return NextResponse.json({ id });
 }

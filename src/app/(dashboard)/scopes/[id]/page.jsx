@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Save, Users, Copy, X, Plus, Trash2, Building2, Phone, ShoppingBag, Puzzle, AlertTriangle, MessageSquare, GraduationCap, ClipboardList, Workflow, Calendar, BarChart3, Check, Link2, Home, Database, Download, ChevronDown } from "lucide-react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { FleetSummary, CrossTabBanner } from "@/components/scope/CrossTabBanner";
 import WorkflowTabComp from "@/components/scope/WorkflowTab";
 import WorkshopTabComp from "@/components/scope/WorkshopTab";
@@ -21,11 +22,11 @@ function formatPhone(value) {
 }
 
 function ContactInlineInput({val,onChange,dis,bold,sz}) {
-  return <input className={`bg-transparent border-none ${bold?"text-white":"text-[#94a3b8]"} text-sm ${sz?"":"w-full"} focus:outline-none`} value={val||""} onChange={e=>onChange(e.target.value)} disabled={dis} placeholder="—" {...(sz?{size:sz}:{})}/>;
+  return <input className={`bg-transparent border-none ${bold?"text-[var(--text)]":"text-[var(--text-secondary)]"} text-sm ${sz?"":"w-full"} focus:outline-none`} value={val||""} onChange={e=>onChange(e.target.value)} disabled={dis} placeholder="—" {...(sz?{size:sz}:{})}/>;
 }
 
 function ContactPhoneInput({val,onChange,dis}) {
-  return <input className="bg-transparent border-none text-[#94a3b8] text-sm focus:outline-none" value={formatPhone(val)} onChange={e=>onChange(formatPhone(e.target.value))} disabled={dis} placeholder="(000)-000-0000" size={14}/>;
+  return <input className="bg-transparent border-none text-[var(--text-secondary)] text-sm focus:outline-none" value={formatPhone(val)} onChange={e=>onChange(formatPhone(e.target.value))} disabled={dis} placeholder="(000)-000-0000" size={14}/>;
 }
 
 const TABS = [
@@ -49,14 +50,14 @@ const TABS = [
 ];
 
 function Field({ label, value, onChange, disabled, type="text", options, placeholder, wide }) {
-  const cls = "w-full px-3 py-2 bg-[#111827] border border-[#2a3a55] rounded-lg text-white text-sm placeholder-[#4a5568] focus:outline-none focus:border-blue-500 transition disabled:opacity-50";
+  const cls = "w-full px-3 py-2 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-[var(--text)] text-sm placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500 transition disabled:opacity-50";
   return (
     <div className={wide?"col-span-2":""}>
-      <label className="block text-xs font-medium text-[#64748b] mb-1.5 uppercase tracking-wider">{label}</label>
+      <label className="block text-xs font-medium text-[var(--text-muted)] mb-1.5 uppercase tracking-wider">{label}</label>
       {type==="select"&&options ? <select value={value||""} onChange={e=>onChange(e.target.value)} disabled={disabled} className={cls}><option value="">— Select —</option>{options.map(o=><option key={o} value={o}>{o}</option>)}</select>
       : type==="textarea" ? <textarea value={value||""} onChange={e=>onChange(e.target.value)} disabled={disabled} rows={3} className={cls} placeholder={placeholder}/>
       : type==="number" ? <input type="number" value={value??""} onChange={e=>onChange(e.target.value?parseInt(e.target.value):null)} disabled={disabled} className={cls} placeholder={placeholder}/>
-      : type==="checkbox" ? <button type="button" onClick={()=>!disabled&&onChange(value?0:1)} disabled={disabled} className={`w-6 h-6 rounded border ${value?"bg-blue-600 border-blue-500":"bg-[#111827] border-[#2a3a55]"} flex items-center justify-center`}>{value?<Check className="w-4 h-4 text-white"/>:null}</button>
+      : type==="checkbox" ? <button type="button" onClick={()=>!disabled&&onChange(value?0:1)} disabled={disabled} className={`w-6 h-6 rounded border ${value?"bg-blue-600 border-blue-500":"bg-[var(--bg-secondary)] border-[var(--border)]"} flex items-center justify-center`}>{value?<Check className="w-4 h-4 text-[var(--text)]"/>:null}</button>
       : <input type={type} value={value||""} onChange={e=>onChange(e.target.value)} disabled={disabled} className={cls} placeholder={placeholder}/>}
     </div>
   );
@@ -72,9 +73,9 @@ function OverviewTab({ data, canEdit, onSave }) {
     <div className="space-y-8">
       <div className="bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/20 rounded-xl p-5">
         <p className="text-sm text-blue-300 font-medium">{data.fleet_name} is a {ov.fleet_size_label||"—"} {ov.type_of_operation||"—"} {ov.current_technology||"—"} {ov.fleet_persona||"—"} fleet</p>
-        <p className="text-xs text-[#64748b] mt-1">↑ Auto-computed summary (mirrors START HERE tab)</p>
+        <p className="text-xs text-[var(--text-muted)] mt-1">↑ Auto-computed summary (mirrors START HERE tab)</p>
       </div>
-      <section><h3 className="text-sm font-semibold text-[#94a3b8] uppercase tracking-wider mb-4">Fleet Profile</h3>
+      <section><h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">Fleet Profile</h3>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Fleet Name" value={ov.fleet_name??data.fleet_name} onChange={v=>set("fleet_name",v)} disabled={!canEdit}/>
           <CityAutocomplete label="HQ Location" value={ov.hq_location} onChange={v=>set("hq_location",v)} onCitySelect={(city)=>{set("hq_location",`${city.city}, ${city.state}`);set("fleet_timezone",city.timezone);}} disabled={!canEdit} placeholder="City, ST"/>
@@ -86,14 +87,14 @@ function OverviewTab({ data, canEdit, onSave }) {
           <Field label="Type of Operation" value={ov.type_of_operation} onChange={v=>set("type_of_operation",v)} disabled={!canEdit} type="select" options={["General Freight","Reefer","LTL","Retail/Wholesale","Bulk/Petrol/Chem/Tanker","Intermodal"]}/>
         </div>
       </section>
-      <section><h3 className="text-sm font-semibold text-[#94a3b8] uppercase tracking-wider mb-4">Fleet Size</h3>
+      <section><h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">Fleet Size</h3>
         <div className="grid grid-cols-3 gap-4">
           <Field label="# Drivers" value={ov.num_drivers} onChange={v=>set("num_drivers",v)} disabled={!canEdit} type="number"/>
           <Field label="# Tractors" value={ov.num_tractors} onChange={v=>set("num_tractors",v)} disabled={!canEdit} type="number"/>
           <Field label="# Trailers" value={ov.num_trailers} onChange={v=>set("num_trailers",v)} disabled={!canEdit} type="number"/>
         </div>
       </section>
-      <section><h3 className="text-sm font-semibold text-[#94a3b8] uppercase tracking-wider mb-4">TMS & Technology</h3>
+      <section><h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">TMS & Technology</h3>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Current TSP" value={ov.current_tsp} onChange={v=>set("current_tsp",v)} disabled={!canEdit} placeholder="e.g. Omni"/>
           <Field label="Current TMS" value={ov.current_tms} onChange={v=>set("current_tms",v)} disabled={!canEdit} placeholder="e.g. McLeod"/>
@@ -103,7 +104,7 @@ function OverviewTab({ data, canEdit, onSave }) {
           <Field label="Future TMS Type" value={ov.future_tms_type} onChange={v=>set("future_tms_type",v)} disabled={!canEdit} type="select" options={["Cloud","Hosted","SaaS","On-Prem"]}/>
         </div>
       </section>
-      <section><h3 className="text-sm font-semibold text-[#94a3b8] uppercase tracking-wider mb-4">Links & References</h3>
+      <section><h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">Links & References</h3>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Account Executive" value={ov.account_executive} onChange={v=>set("account_executive",v)} disabled={!canEdit}/>
           <Field label="Date Lead Provided" value={ov.date_lead_provided} onChange={v=>set("date_lead_provided",v)} disabled={!canEdit} type="date"/>
@@ -114,52 +115,52 @@ function OverviewTab({ data, canEdit, onSave }) {
         </div>
       </section>
       {/* Hardware Overview (rows 47-58) */}
-      <section><h3 className="text-sm font-semibold text-[#94a3b8] uppercase tracking-wider mb-4">Hardware Overview</h3>
-        <div className="bg-[#111827] border border-[#2a3a55] rounded-xl overflow-auto">
-          <table className="w-full text-sm"><thead><tr className="bg-[#1e3a5f]/50">
-            {["Item","Type","SKU","Expected Amount","Notes"].map(h=><th key={h} className="text-left px-4 py-3 text-xs text-[#94a3b8] font-semibold">{h}</th>)}
+      <section><h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">Hardware Overview</h3>
+        <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl overflow-auto">
+          <table className="w-full text-sm"><thead><tr className="bg-blue-500/20/50">
+            {["Item","Type","SKU","Expected Amount","Notes"].map(h=><th key={h} className="text-left px-4 py-3 text-xs text-[var(--text-secondary)] font-semibold">{h}</th>)}
           </tr></thead><tbody>
             {(()=>{let hw=[];try{hw=JSON.parse(ov.hardware_json||"[]")}catch{}
               if(!hw.length) hw=["Tablets","OBC (PS+)","Ball","Arms","Knox Provisioning","CVDs","Cable 1","Cable 2","Cable 3","Cable 4"].map(n=>({name:n,type:"",sku:"",amount:"",notes:""}));
               return hw.map((h,i)=>(
-                <tr key={i} className="border-t border-[#2a3a55]/50 hover:bg-[#1a2234]">
-                  <td className="px-4 py-2 text-white font-medium text-xs">{h.name}</td>
+                <tr key={i} className="border-t border-[var(--border)]/50 hover:bg-[var(--bg-card)]">
+                  <td className="px-4 py-2 text-[var(--text)] font-medium text-xs">{h.name}</td>
                   {["type","sku","amount","notes"].map(f=>(
-                    <td key={f} className="px-4 py-1"><input className="w-full bg-transparent text-[#94a3b8] text-xs focus:outline-none" value={h[f]||""} onChange={e=>{const up=[...hw];up[i]={...up[i],[f]:e.target.value};set("hardware_json",JSON.stringify(up))}} disabled={!canEdit} placeholder="—"/></td>
+                    <td key={f} className="px-4 py-1"><input className="w-full bg-transparent text-[var(--text-secondary)] text-xs focus:outline-none" value={h[f]||""} onChange={e=>{const up=[...hw];up[i]={...up[i],[f]:e.target.value};set("hardware_json",JSON.stringify(up))}} disabled={!canEdit} placeholder="—"/></td>
                   ))}
                 </tr>))})()}
           </tbody></table>
         </div>
       </section>
       {/* Vehicle Breakdown (rows 59-91) */}
-      <section><h3 className="text-sm font-semibold text-[#94a3b8] uppercase tracking-wider mb-4">Vehicle Breakdown</h3>
+      <section><h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">Vehicle Breakdown</h3>
         <div className="grid grid-cols-2 gap-4 mb-4">
           <Field label="Vehicle List Link" value={ov.vehicle_list_link} onChange={v=>set("vehicle_list_link",v)} disabled={!canEdit} placeholder="URL"/>
         </div>
-        <div className="bg-[#111827] border border-[#2a3a55] rounded-xl overflow-auto">
-          <table className="w-full text-sm"><thead><tr className="bg-[#1e3a5f]/50">
-            {["How Many?","Year","Make","Model"].map(h=><th key={h} className="text-left px-4 py-3 text-xs text-[#94a3b8] font-semibold">{h}</th>)}
+        <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl overflow-auto">
+          <table className="w-full text-sm"><thead><tr className="bg-blue-500/20/50">
+            {["How Many?","Year","Make","Model"].map(h=><th key={h} className="text-left px-4 py-3 text-xs text-[var(--text-secondary)] font-semibold">{h}</th>)}
             {canEdit&&<th className="w-10"/>}
           </tr></thead><tbody>
             {(()=>{let veh=[];try{veh=JSON.parse(ov.vehicles_json||"[]")}catch{}
               return veh.length?veh.map((v,i)=>(
-                <tr key={i} className="border-t border-[#2a3a55]/50">
+                <tr key={i} className="border-t border-[var(--border)]/50">
                   {["count","year","make","model"].map(f=>(
                     <td key={f} className="px-4 py-1">{f==="make"?
-                      <select className="bg-transparent text-white text-xs focus:outline-none" value={v.make||""} onChange={e=>{const up=[...veh];up[i]={...up[i],make:e.target.value};set("vehicles_json",JSON.stringify(up))}} disabled={!canEdit}>
+                      <select className="bg-transparent text-[var(--text)] text-xs focus:outline-none" value={v.make||""} onChange={e=>{const up=[...veh];up[i]={...up[i],make:e.target.value};set("vehicles_json",JSON.stringify(up))}} disabled={!canEdit}>
                         <option value="">—</option>{["International","Freightliner","Kenworth","Hino","Peterbilt","Volvo"].map(m=><option key={m}>{m}</option>)}
                       </select>:
-                      <input className="w-full bg-transparent text-[#94a3b8] text-xs focus:outline-none" value={v[f]||""} onChange={e=>{const up=[...veh];up[i]={...up[i],[f]:e.target.value};set("vehicles_json",JSON.stringify(up))}} disabled={!canEdit}/>}
+                      <input className="w-full bg-transparent text-[var(--text-secondary)] text-xs focus:outline-none" value={v[f]||""} onChange={e=>{const up=[...veh];up[i]={...up[i],[f]:e.target.value};set("vehicles_json",JSON.stringify(up))}} disabled={!canEdit}/>}
                     </td>))}
                   {canEdit&&<td><button onClick={()=>{const up=veh.filter((_,j)=>j!==i);set("vehicles_json",JSON.stringify(up))}} className="text-red-400/40 hover:text-red-400"><Trash2 className="w-3 h-3"/></button></td>}
                 </tr>)):
-                <tr><td colSpan={5} className="px-4 py-6 text-center text-[#4a5568] text-xs">No vehicles listed</td></tr>})()}
+                <tr><td colSpan={5} className="px-4 py-6 text-center text-[var(--text-muted)] text-xs">No vehicles listed</td></tr>})()}
           </tbody></table>
         </div>
         {canEdit&&<button onClick={()=>{let veh=[];try{veh=JSON.parse(ov.vehicles_json||"[]")}catch{} veh.push({count:"",year:"",make:"",model:""});set("vehicles_json",JSON.stringify(veh))}} className="mt-2 text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"><Plus className="w-3 h-3"/> Add Vehicle Row</button>}
       </section>
       {/* Fuel Haulers & Shipment Details (rows 92-109) */}
-      <section><h3 className="text-sm font-semibold text-[#94a3b8] uppercase tracking-wider mb-4">Fuel Haulers & Shipment Details</h3>
+      <section><h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">Fuel Haulers & Shipment Details</h3>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Do you have tankers?" value={ov.has_tankers} onChange={v=>set("has_tankers",v)} disabled={!canEdit} type="select" options={["Yes","No"]}/>
           <Field label="# of single compartments?" value={ov.single_compartments} onChange={v=>set("single_compartments",v)} disabled={!canEdit}/>
@@ -179,7 +180,7 @@ function OverviewTab({ data, canEdit, onSave }) {
           <Field label="Pick-up/drop-off process" value={ov.pickup_dropoff_process} onChange={v=>set("pickup_dropoff_process",v)} disabled={!canEdit} wide/>
         </div>
       </section>
-      {canEdit && <button onClick={()=>onSave("overview",ov)} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg transition flex items-center gap-2"><Save className="w-4 h-4"/> Save Overview</button>}
+      {canEdit && <button onClick={()=>onSave("overview",ov)} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-[var(--text)] font-medium rounded-lg transition flex items-center gap-2"><Save className="w-4 h-4"/> Save Overview</button>}
     </div>
   );
 }
@@ -201,17 +202,17 @@ function ContactsTab({ data, canEdit, onSave }) {
       ]}/>
       {/* Contacts!B3 = Overview!H3 (AE name in header) */}
       {data.overview?.account_executive && (
-        <div className="bg-[#111827] border border-[#2a3a55] rounded-xl p-3 flex items-center gap-3">
-          <span className="text-[10px] text-[#64748b] uppercase tracking-wider">Account Executive:</span>
-          <span className="text-sm text-white font-medium">{data.overview.account_executive}</span>
+        <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-3 flex items-center gap-3">
+          <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">Account Executive:</span>
+          <span className="text-sm text-[var(--text)] font-medium">{data.overview.account_executive}</span>
           <span className="text-[10px] text-cyan-400/60 font-mono ml-auto">← Overview!H3</span>
         </div>
       )}
-      <div><h3 className="text-sm font-semibold text-[#94a3b8] uppercase tracking-wider mb-4">PS Team</h3>
-        <div className="bg-[#111827] border border-[#2a3a55] rounded-xl overflow-hidden"><table className="w-full text-sm"><thead><tr className="bg-[#1e3a5f]/50">
-          {["Role","Name","Email","Phone"].map(h=><th key={h} className="text-left px-4 py-3 text-xs text-[#94a3b8] font-semibold">{h}</th>)}
+      <div><h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">PS Team</h3>
+        <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl overflow-hidden"><table className="w-full text-sm"><thead><tr className="bg-blue-500/20/50">
+          {["Role","Name","Email","Phone"].map(h=><th key={h} className="text-left px-4 py-3 text-xs text-[var(--text-secondary)] font-semibold">{h}</th>)}
         </tr></thead><tbody>{ps.map(c=>(
-          <tr key={c.id} className="border-t border-[#2a3a55]/50 hover:bg-[#1a2234]">
+          <tr key={c.id} className="border-t border-[var(--border)]/50 hover:bg-[var(--bg-card)]">
             <td className="px-4 py-2 text-blue-400 font-medium text-xs w-48">{c.role_title}:</td>
             <td className="px-4 py-2"><ContactInlineInput val={c.name} onChange={v=>upd(c.id,"name",v)} dis={!canEdit} bold sz={20}/></td>
             <td className="px-4 py-2"><ContactInlineInput val={c.email} onChange={v=>upd(c.id,"email",v)} dis={!canEdit} sz={20}/></td>
@@ -219,16 +220,16 @@ function ContactsTab({ data, canEdit, onSave }) {
           </tr>))}</tbody></table></div>
       </div>
       <div><div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-[#94a3b8] uppercase tracking-wider">Fleet Contacts</h3>
+        <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Fleet Contacts</h3>
         {canEdit&&<button onClick={()=>onSave("contacts",{contact_type:"fleet",role_title:"",name:"",sort_order:fleet.length})} className="flex items-center gap-1 text-xs text-blue-400"><Plus className="w-3.5 h-3.5"/> Add</button>}
       </div>
-        <div className="bg-[#111827] border border-[#2a3a55] rounded-xl overflow-hidden"><table className="w-full text-sm"><thead><tr className="bg-[#1e3a5f]/50">
-          {["Role","Name","Email","Phone"].map(h=><th key={h} className="text-left px-4 py-3 text-xs text-[#94a3b8] font-semibold">{h}</th>)}
+        <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl overflow-hidden"><table className="w-full text-sm"><thead><tr className="bg-blue-500/20/50">
+          {["Role","Name","Email","Phone"].map(h=><th key={h} className="text-left px-4 py-3 text-xs text-[var(--text-secondary)] font-semibold">{h}</th>)}
           {canEdit&&<th className="w-10"/>}
         </tr></thead><tbody>
-          {fleet.length===0?<tr><td colSpan={5} className="px-4 py-8 text-center text-[#4a5568] text-sm">No fleet contacts yet</td></tr>:
+          {fleet.length===0?<tr><td colSpan={5} className="px-4 py-8 text-center text-[var(--text-muted)] text-sm">No fleet contacts yet</td></tr>:
           fleet.map(c=>(
-            <tr key={c.id} className="border-t border-[#2a3a55]/50 hover:bg-[#1a2234]">
+            <tr key={c.id} className="border-t border-[var(--border)]/50 hover:bg-[var(--bg-card)]">
               <td className="px-4 py-2"><ContactInlineInput val={c.role_title} onChange={v=>upd(c.id,"role_title",v)} dis={!canEdit} bold/></td>
               <td className="px-4 py-2"><ContactInlineInput val={c.name} onChange={v=>upd(c.id,"name",v)} dis={!canEdit} bold sz={20}/></td>
               <td className="px-4 py-2"><ContactInlineInput val={c.email} onChange={v=>upd(c.id,"email",v)} dis={!canEdit} sz={20}/></td>
@@ -237,28 +238,28 @@ function ContactsTab({ data, canEdit, onSave }) {
             </tr>))}
         </tbody></table></div>
       </div>
-      {canEdit && <button onClick={()=>onSave("contacts",contacts,"bulk")} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg transition flex items-center gap-2"><Save className="w-4 h-4"/> Save Contacts</button>}
+      {canEdit && <button onClick={()=>onSave("contacts",contacts,"bulk")} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-[var(--text)] font-medium rounded-lg transition flex items-center gap-2"><Save className="w-4 h-4"/> Save Contacts</button>}
     </div>
   );
 }
 
 function SolutionTab({ data, canEdit, onSave }) {
   const toggle=(f,k)=>onSave("features",{...f,[k]:f[k]?0:1});
-  const Chk=({val,c="blue"})=>(<div className={`w-5 h-5 rounded border mx-auto flex items-center justify-center ${val?`bg-${c}-600 border-${c}-500`:"bg-[#0a0e17] border-[#2a3a55]"}`}>{val?<Check className="w-3 h-3 text-white"/>:null}</div>);
+  const Chk=({val,c="blue"})=>(<div className={`w-5 h-5 rounded border mx-auto flex items-center justify-center ${val?`bg-${c}-600 border-${c}-500`:"bg-[var(--bg)] border-[var(--border)]"}`}>{val?<Check className="w-3 h-3 text-[var(--text)]"/>:null}</div>);
   return (
     <div>
       <div className="bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/20 rounded-xl p-4 mb-6"><p className="text-xs text-blue-300">↑ Platform: <strong>{data.overview?.ps_platform||"—"}</strong> (linked from Overview)</p></div>
-      <div className="bg-[#111827] border border-[#2a3a55] rounded-xl overflow-hidden"><table className="w-full text-sm"><thead><tr className="bg-[#1e3a5f]/50">
-        {["Feature","Needed","Licenses","Quote","Pilot","Prod","Notes"].map(h=><th key={h} className={`px-4 py-3 text-xs text-[#94a3b8] font-semibold ${h==="Feature"||h==="Notes"?"text-left":"text-center"} ${h!=="Feature"&&h!=="Notes"?"w-20":""}`}>{h}</th>)}
+      <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl overflow-hidden"><table className="w-full text-sm"><thead><tr className="bg-blue-500/20/50">
+        {["Feature","Needed","Licenses","Quote","Pilot","Prod","Notes"].map(h=><th key={h} className={`px-4 py-3 text-xs text-[var(--text-secondary)] font-semibold ${h==="Feature"||h==="Notes"?"text-left":"text-center"} ${h!=="Feature"&&h!=="Notes"?"w-20":""}`}>{h}</th>)}
       </tr></thead><tbody>{data.features.map(f=>(
-        <tr key={f.id} className="border-t border-[#2a3a55]/50 hover:bg-[#1a2234]">
-          <td className="px-4 py-2 font-medium text-white">{f.feature_name}</td>
+        <tr key={f.id} className="border-t border-[var(--border)]/50 hover:bg-[var(--bg-card)]">
+          <td className="px-4 py-2 font-medium text-[var(--text)]">{f.feature_name}</td>
           <td className="px-4 py-2 text-center cursor-pointer" onClick={()=>canEdit&&toggle(f,"needed")}><Chk val={f.needed}/></td>
-          <td className="px-4 py-2 text-center"><input type="number" className="w-14 bg-transparent border-none text-center text-[#94a3b8] text-sm focus:outline-none" value={f.num_licenses??""} onChange={e=>onSave("features",{...f,num_licenses:e.target.value?parseInt(e.target.value):null})} disabled={!canEdit}/></td>
+          <td className="px-4 py-2 text-center"><input type="number" className="w-14 bg-transparent border-none text-center text-[var(--text-secondary)] text-sm focus:outline-none" value={f.num_licenses??""} onChange={e=>onSave("features",{...f,num_licenses:e.target.value?parseInt(e.target.value):null})} disabled={!canEdit}/></td>
           <td className="px-4 py-2 text-center cursor-pointer" onClick={()=>canEdit&&toggle(f,"required_for_quote")}><Chk val={f.required_for_quote} c="emerald"/></td>
           <td className="px-4 py-2 text-center cursor-pointer" onClick={()=>canEdit&&toggle(f,"required_for_pilot")}><Chk val={f.required_for_pilot} c="emerald"/></td>
           <td className="px-4 py-2 text-center cursor-pointer" onClick={()=>canEdit&&toggle(f,"required_for_production")}><Chk val={f.required_for_production} c="emerald"/></td>
-          <td className="px-4 py-2"><input className="bg-transparent border-none text-[#94a3b8] text-sm w-full focus:outline-none" value={f.notes||""} onChange={e=>onSave("features",{...f,notes:e.target.value})} disabled={!canEdit} placeholder="—"/></td>
+          <td className="px-4 py-2"><input className="bg-transparent border-none text-[var(--text-secondary)] text-sm w-full focus:outline-none" value={f.notes||""} onChange={e=>onSave("features",{...f,notes:e.target.value})} disabled={!canEdit} placeholder="—"/></td>
         </tr>))}</tbody></table></div>
     </div>
   );
@@ -268,13 +269,13 @@ function GapsTab({ data, canEdit, onSave }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-[#64748b]">Gaps or pain points identified during alignment.</p>
+        <p className="text-sm text-[var(--text-muted)]">Gaps or pain points identified during alignment.</p>
         {canEdit&&<button onClick={()=>onSave("gaps",{gap_number:data.gaps.length+1,sort_order:data.gaps.length})} className="flex items-center gap-1 text-xs text-blue-400"><Plus className="w-3.5 h-3.5"/> Add Gap</button>}
       </div>
       <div className="space-y-4">
-        {data.gaps.length===0?<div className="text-center py-12 text-[#4a5568]">No gaps yet</div>:
+        {data.gaps.length===0?<div className="text-center py-12 text-[var(--text-muted)]">No gaps yet</div>:
         data.gaps.map((g,i)=>(
-          <div key={g.id} className="bg-[#111827] border border-[#2a3a55] rounded-xl p-5">
+          <div key={g.id} className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-5">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-bold text-amber-400 bg-amber-500/10 px-2 py-1 rounded">Gap #{i+1}</span>
               {canEdit&&<button onClick={()=>onSave("gaps",{id:g.id},"delete")} className="text-red-400"><Trash2 className="w-4 h-4"/></button>}
@@ -304,21 +305,21 @@ function MarketplaceTab({ data, canEdit, onSave }) {
     <div className="space-y-8">
       <CrossTabBanner links={[{field:"App validation (VLOOKUP)",source:"Marketplace SF Lookup!A:A"},{field:"Auto-fill details",source:"FILTER(Marketplace SF Lookup!A:I, ...)"},{field:"Fleet banner",source:"Overview!C1"}]}/>
       <div><div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-[#94a3b8] uppercase tracking-wider">Marketplace Apps ({data.marketplace_apps.length})</h3>
+        <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Marketplace Apps ({data.marketplace_apps.length})</h3>
         {canEdit && <button onClick={openCatalog} className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 px-3 py-2 rounded-lg border border-emerald-500/20"><Plus className="w-3.5 h-3.5"/> Add from SF Catalog</button>}
       </div>
-        <div className="bg-[#111827] border border-[#2a3a55] rounded-xl overflow-auto"><table className="w-full text-sm"><thead><tr className="bg-[#1e3a5f]/50">
-          <th className="text-left px-4 py-3 text-xs text-[#94a3b8] font-semibold w-12">Valid</th>
-          {["Product","Partner","Category","Stage"].map(h=><th key={h} className="text-left px-4 py-3 text-xs text-[#94a3b8] font-semibold">{h}</th>)}
+        <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl overflow-auto"><table className="w-full text-sm"><thead><tr className="bg-blue-500/20/50">
+          <th className="text-left px-4 py-3 text-xs text-[var(--text-secondary)] font-semibold w-12">Valid</th>
+          {["Product","Partner","Category","Stage"].map(h=><th key={h} className="text-left px-4 py-3 text-xs text-[var(--text-secondary)] font-semibold">{h}</th>)}
           {canEdit&&<th className="w-10"/>}
         </tr></thead><tbody>
-          {data.marketplace_apps.length===0?<tr><td colSpan={6} className="px-4 py-8 text-center text-[#4a5568]">No marketplace apps — click Add from SF Catalog</td></tr>:
+          {data.marketplace_apps.length===0?<tr><td colSpan={6} className="px-4 py-8 text-center text-[var(--text-muted)]">No marketplace apps — click Add from SF Catalog</td></tr>:
           data.marketplace_apps.map(a=>(
-            <tr key={a.id} className="border-t border-[#2a3a55]/50 hover:bg-[#1a2234]">
+            <tr key={a.id} className="border-t border-[var(--border)]/50 hover:bg-[var(--bg-card)]">
               <td className="px-4 py-2"><span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/15">{a.product_name?"Yes":"No"}</span></td>
-              <td className="px-4 py-2 text-white font-medium">{a.product_name}</td>
-              <td className="px-4 py-2 text-[#94a3b8]">{a.partner_account}</td>
-              <td className="px-4 py-2 text-[#94a3b8]">{a.partner_category}</td>
+              <td className="px-4 py-2 text-[var(--text)] font-medium">{a.product_name}</td>
+              <td className="px-4 py-2 text-[var(--text-secondary)]">{a.partner_account}</td>
+              <td className="px-4 py-2 text-[var(--text-secondary)]">{a.partner_category}</td>
               <td className="px-4 py-2"><span className="text-xs px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">{a.stage}</span></td>
               {canEdit&&<td className="px-2"><button onClick={()=>onSave("marketplace",{id:a.id},"delete")} className="p-1 hover:bg-red-500/10 rounded text-red-400"><Trash2 className="w-3.5 h-3.5"/></button></td>}
             </tr>))}
@@ -326,28 +327,28 @@ function MarketplaceTab({ data, canEdit, onSave }) {
         <p className="text-[10px] text-cyan-400/60 font-mono mt-2">Valid = VLOOKUP(name, Marketplace SF Lookup!$A:$A, 1, FALSE)</p>
       </div>
       {showCatalog && <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={()=>setShowCatalog(false)}>
-        <div className="bg-[#111827] border border-[#2a3a55] rounded-2xl w-full max-w-3xl max-h-[80vh] overflow-hidden" onClick={e=>e.stopPropagation()}>
-          <div className="p-4 border-b border-[#2a3a55] flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-white">Select from SF Catalog ({catalog.length})</h3>
-            <button onClick={()=>setShowCatalog(false)} className="text-[#64748b] hover:text-white"><X className="w-5 h-5"/></button>
+        <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-2xl w-full max-w-3xl max-h-[80vh] overflow-hidden" onClick={e=>e.stopPropagation()}>
+          <div className="p-4 border-b border-[var(--border)] flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-[var(--text)]">Select from SF Catalog ({catalog.length})</h3>
+            <button onClick={()=>setShowCatalog(false)} className="text-[var(--text-muted)] hover:text-[var(--text)]"><X className="w-5 h-5"/></button>
           </div>
-          <div className="p-4 border-b border-[#2a3a55]"><input className="w-full px-3 py-2 bg-[#0a0e17] border border-[#2a3a55] rounded-lg text-white text-sm focus:outline-none focus:border-blue-500" placeholder="Search..." value={catSearch} onChange={e=>setCatSearch(e.target.value)}/></div>
+          <div className="p-4 border-b border-[var(--border)]"><input className="w-full px-3 py-2 bg-[var(--bg)] border border-[var(--border)] rounded-lg text-[var(--text)] text-sm focus:outline-none focus:border-blue-500" placeholder="Search..." value={catSearch} onChange={e=>setCatSearch(e.target.value)}/></div>
           <div className="overflow-y-auto max-h-[60vh]">{filteredCatalog.map(p=>(
-            <button key={p.id} onClick={()=>addFromCatalog(p)} className="w-full text-left px-4 py-3 border-b border-[#2a3a55]/30 hover:bg-[#1a2234] transition">
+            <button key={p.id} onClick={()=>addFromCatalog(p)} className="w-full text-left px-4 py-3 border-b border-[var(--border)]/30 hover:bg-[var(--bg-card)] transition">
               <div className="flex items-center justify-between">
-                <div><span className="text-sm text-white font-medium">{p.product_name}</span><span className="text-xs text-[#64748b] ml-2">{p.partner_account}</span></div>
+                <div><span className="text-sm text-[var(--text)] font-medium">{p.product_name}</span><span className="text-xs text-[var(--text-muted)] ml-2">{p.partner_account}</span></div>
                 <div className="flex gap-2"><span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400">{p.partner_category}</span><span className={`text-[10px] px-2 py-0.5 rounded-full ${p.stage==="In Production"?"bg-emerald-500/10 text-emerald-400":"bg-amber-500/10 text-amber-400"}`}>{p.stage}</span></div>
               </div>
             </button>))}</div>
         </div>
       </div>}
       <div><div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-[#94a3b8] uppercase tracking-wider">User Provided Apps ({data.upas.length})</h3>
+        <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider">User Provided Apps ({data.upas.length})</h3>
         {canEdit&&<button onClick={()=>onSave("upas",{name:"New App",sort_order:data.upas.length})} className="flex items-center gap-1 text-xs text-blue-400"><Plus className="w-3.5 h-3.5"/> Add UPA</button>}
       </div>
         <div className="space-y-3">
           {data.upas.map(u=>(
-            <div key={u.id} className="bg-[#111827] border border-[#2a3a55] rounded-xl p-4">
+            <div key={u.id} className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-4">
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Name" value={u.name} onChange={v=>onSave("upas",{...u,name:v})} disabled={!canEdit}/>
                 <Field label="Website URL" value={u.website_url} onChange={v=>onSave("upas",{...u,website_url:v})} disabled={!canEdit}/>
@@ -356,7 +357,7 @@ function MarketplaceTab({ data, canEdit, onSave }) {
                 {canEdit&&<div className="flex justify-end col-span-2"><button onClick={()=>onSave("upas",{id:u.id},"delete")} className="text-xs text-red-400 flex items-center gap-1"><Trash2 className="w-3 h-3"/> Remove</button></div>}
               </div>
             </div>))}
-          {data.upas.length===0&&<div className="text-center py-8 text-[#4a5568] text-sm">No UPAs</div>}
+          {data.upas.length===0&&<div className="text-center py-8 text-[var(--text-muted)] text-sm">No UPAs</div>}
         </div>
       </div>
     </div>
@@ -373,17 +374,17 @@ function InstallTab({ data, canEdit, onSave }) {
       {Object.entries(byY).sort(([a],[b])=>+a-+b).map(([yr,fs])=>{
         const s=fs.sort((a,b)=>a.month-b.month);
         return(<div key={yr}><h3 className="text-lg font-bold mb-3">{yr}</h3>
-          <div className="bg-[#111827] border border-[#2a3a55] rounded-xl overflow-auto"><table className="w-full text-sm"><thead><tr className="bg-[#1e3a5f]/50">
-            <th className="px-3 py-3 text-left text-xs text-[#94a3b8] font-semibold w-24">Type</th>
-            {s.map(f=><th key={f.month} className="px-1 py-3 text-center text-xs text-[#94a3b8] font-semibold">{M[f.month-1]}</th>)}
-            <th className="px-3 py-3 text-center text-xs text-[#94a3b8] font-semibold bg-blue-500/10">Total</th>
+          <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl overflow-auto"><table className="w-full text-sm"><thead><tr className="bg-blue-500/20/50">
+            <th className="px-3 py-3 text-left text-xs text-[var(--text-secondary)] font-semibold w-24">Type</th>
+            {s.map(f=><th key={f.month} className="px-1 py-3 text-center text-xs text-[var(--text-secondary)] font-semibold">{M[f.month-1]}</th>)}
+            <th className="px-3 py-3 text-center text-xs text-[var(--text-secondary)] font-semibold bg-blue-500/10">Total</th>
           </tr></thead><tbody>
-            <tr className="border-t border-[#2a3a55]/50"><td className="px-3 py-2 text-amber-400 font-medium text-xs">Forecast</td>
-              {s.map(f=><td key={f.month} className="px-1 py-2 text-center"><input type="number" className="w-12 bg-transparent text-center text-white text-sm focus:outline-none border-none" value={f.forecasted||0} onChange={e=>onSave("forecasts",{...f,forecasted:parseInt(e.target.value)||0})} disabled={!canEdit}/></td>)}
+            <tr className="border-t border-[var(--border)]/50"><td className="px-3 py-2 text-amber-400 font-medium text-xs">Forecast</td>
+              {s.map(f=><td key={f.month} className="px-1 py-2 text-center"><input type="number" className="w-12 bg-transparent text-center text-[var(--text)] text-sm focus:outline-none border-none" value={f.forecasted||0} onChange={e=>onSave("forecasts",{...f,forecasted:parseInt(e.target.value)||0})} disabled={!canEdit}/></td>)}
               <td className="px-3 py-2 text-center font-bold text-amber-400 bg-blue-500/5">{s.reduce((a,f)=>a+(f.forecasted||0),0)}</td>
             </tr>
-            <tr className="border-t border-[#2a3a55]/50"><td className="px-3 py-2 text-emerald-400 font-medium text-xs">Actual</td>
-              {s.map(f=><td key={f.month} className="px-1 py-2 text-center"><input type="number" className="w-12 bg-transparent text-center text-white text-sm focus:outline-none border-none" value={f.actual||0} onChange={e=>onSave("forecasts",{...f,actual:parseInt(e.target.value)||0})} disabled={!canEdit}/></td>)}
+            <tr className="border-t border-[var(--border)]/50"><td className="px-3 py-2 text-emerald-400 font-medium text-xs">Actual</td>
+              {s.map(f=><td key={f.month} className="px-1 py-2 text-center"><input type="number" className="w-12 bg-transparent text-center text-[var(--text)] text-sm focus:outline-none border-none" value={f.actual||0} onChange={e=>onSave("forecasts",{...f,actual:parseInt(e.target.value)||0})} disabled={!canEdit}/></td>)}
               <td className="px-3 py-2 text-center font-bold text-emerald-400 bg-blue-500/5">{s.reduce((a,f)=>a+(f.actual||0),0)}</td>
             </tr>
           </tbody></table></div></div>);
@@ -418,19 +419,19 @@ function StatsTab({ data }) {
       </div>
       {/* Stats!B2-B4 — aggregate counts */}
       <div className="grid grid-cols-3 lg:grid-cols-5 gap-4">{items.map(s=>(
-        <div key={s.l} className="bg-[#1a2234] border border-[#2a3a55] rounded-xl p-6">
+        <div key={s.l} className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-6">
           <div className={`text-4xl font-bold mb-2 ${s.c}`}>{s.v}</div>
-          <div className="text-sm text-[#64748b]">{s.l}</div>
-          <div className="text-[10px] text-[#4a5568] mt-1 font-mono">{s.src}</div>
+          <div className="text-sm text-[var(--text-muted)]">{s.l}</div>
+          <div className="text-[10px] text-[var(--text-muted)] mt-1 font-mono">{s.src}</div>
         </div>))}</div>
       {/* Stats!B6-B12 — form category COUNTIF */}
-      <div className="bg-[#111827] border border-[#2a3a55] rounded-xl p-5">
+      <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-5">
         <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-4">Form Category Breakdown (COUNTIF)</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {catLabels.map(cat => (
-            <div key={cat} className="flex justify-between py-2 px-3 border border-[#2a3a55]/30 rounded-lg">
-              <span className="text-[#94a3b8] text-sm">{cat}</span>
-              <span className="text-white font-bold text-sm">{formCats[cat] || 0}</span>
+            <div key={cat} className="flex justify-between py-2 px-3 border border-[var(--border)]/30 rounded-lg">
+              <span className="text-[var(--text-secondary)] text-sm">{cat}</span>
+              <span className="text-[var(--text)] font-bold text-sm">{formCats[cat] || 0}</span>
             </div>
           ))}
         </div>
@@ -454,35 +455,35 @@ function SharingTab({ data, scopeId }) {
   const rc={owner:"text-blue-400 bg-blue-500/10 border-blue-500/20",editor:"text-emerald-400 bg-emerald-500/10 border-emerald-500/20",viewer:"text-amber-400 bg-amber-500/10 border-amber-500/20"};
   return (
     <div className="space-y-8">
-      <div><h3 className="text-sm font-semibold text-[#94a3b8] uppercase tracking-wider mb-4">Share Link (for Salesforce)</h3>
-        <div className="bg-[#111827] border border-[#2a3a55] rounded-xl p-6">
+      <div><h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">Share Link (for Salesforce)</h3>
+        <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-6">
           {data.share_access!=="disabled"&&shareUrl ? (
             <div className="space-y-4">
               <div className="flex items-center gap-3">
-                <div className="flex-1 px-4 py-2.5 bg-[#0a0e17] border border-[#2a3a55] rounded-lg font-mono text-sm text-cyan-400 truncate">{shareUrl}</div>
-                <button onClick={copyLink} className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg text-white text-sm font-medium flex items-center gap-2">{copied?<Check className="w-4 h-4"/>:<Copy className="w-4 h-4"/>}{copied?"Copied!":"Copy"}</button>
+                <div className="flex-1 px-4 py-2.5 bg-[var(--bg)] border border-[var(--border)] rounded-lg font-mono text-sm text-cyan-400 truncate">{shareUrl}</div>
+                <button onClick={copyLink} className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg text-[var(--text)] text-sm font-medium flex items-center gap-2">{copied?<Check className="w-4 h-4"/>:<Copy className="w-4 h-4"/>}{copied?"Copied!":"Copy"}</button>
               </div>
-              <p className="text-xs text-[#64748b]">Paste this URL into Salesforce. Anyone with the link can view this scope.</p>
+              <p className="text-xs text-[var(--text-muted)]">Paste this URL into Salesforce. Anyone with the link can view this scope.</p>
               {isOwner&&<button onClick={disableShare} className="text-xs text-red-400">Disable sharing</button>}
             </div>
           ) : (
             <div className="text-center py-4">
               <Link2 className="w-8 h-8 mx-auto mb-3 text-[#2a3a55]"/>
-              <p className="text-sm text-[#64748b] mb-4">Sharing disabled. Generate a link to share in Salesforce.</p>
-              {isOwner&&<button onClick={enableShare} className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium">Generate Share Link</button>}
+              <p className="text-sm text-[var(--text-muted)] mb-4">Sharing disabled. Generate a link to share in Salesforce.</p>
+              {isOwner&&<button onClick={enableShare} className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-[var(--text)] rounded-lg text-sm font-medium">Generate Share Link</button>}
             </div>
           )}
         </div>
       </div>
-      <div><h3 className="text-sm font-semibold text-[#94a3b8] uppercase tracking-wider mb-4">Team Members</h3>
+      <div><h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">Team Members</h3>
         {isOwner&&<div className="flex gap-3 mb-4">
-          <input value={invEmail} onChange={e=>setInvEmail(e.target.value)} placeholder="Email address" className="flex-1 px-4 py-2.5 bg-[#111827] border border-[#2a3a55] rounded-lg text-white text-sm placeholder-[#4a5568] focus:outline-none focus:border-blue-500"/>
-          <select value={invRole} onChange={e=>setInvRole(e.target.value)} className="px-3 py-2.5 bg-[#111827] border border-[#2a3a55] rounded-lg text-white text-sm"><option value="viewer">Viewer</option><option value="editor">Editor</option></select>
-          <button onClick={invite} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium">Invite</button>
+          <input value={invEmail} onChange={e=>setInvEmail(e.target.value)} placeholder="Email address" className="flex-1 px-4 py-2.5 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-[var(--text)] text-sm placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500"/>
+          <select value={invRole} onChange={e=>setInvRole(e.target.value)} className="px-3 py-2.5 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-[var(--text)] text-sm"><option value="viewer">Viewer</option><option value="editor">Editor</option></select>
+          <button onClick={invite} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-[var(--text)] rounded-lg text-sm font-medium">Invite</button>
         </div>}
         <div className="space-y-2">{data.collaborators.map(c=>(
-          <div key={c.id} className="flex items-center justify-between bg-[#111827] border border-[#2a3a55] rounded-lg px-4 py-3">
-            <div><span className="text-white font-medium text-sm">{c.name}</span><span className="text-[#64748b] text-sm ml-2">{c.email}</span></div>
+          <div key={c.id} className="flex items-center justify-between bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg px-4 py-3">
+            <div><span className="text-[var(--text)] font-medium text-sm">{c.name}</span><span className="text-[var(--text-muted)] text-sm ml-2">{c.email}</span></div>
             <div className="flex items-center gap-3">
               <span className={`text-xs px-2 py-0.5 rounded border font-semibold uppercase ${rc[c.role]}`}>{c.role}</span>
               {isOwner&&c.role!=="owner"&&<button onClick={()=>remove(c.user_id)} className="text-red-400"><X className="w-4 h-4"/></button>}
@@ -531,21 +532,21 @@ function SummaryTab({ data, onNavigate }) {
         </div>
       )}
       <div>
-        <h3 className="text-sm font-semibold text-[#94a3b8] uppercase tracking-wider mb-2">Platform</h3>
-        <p className="text-lg font-bold text-white">{ov.ps_platform || "—"}</p>
+        <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Platform</h3>
+        <p className="text-lg font-bold text-[var(--text)]">{ov.ps_platform || "—"}</p>
         <p className="text-[10px] text-cyan-400/60 font-mono mt-1">START HERE!B5 = Overview!B5</p>
       </div>
       <div>
-        <h3 className="text-sm font-semibold text-[#94a3b8] uppercase tracking-wider mb-4">Tab Navigation & Data Flow</h3>
+        <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">Tab Navigation & Data Flow</h3>
         <div className="space-y-2">
           {tabs.map(t=>{const I=t.icon; return(
-            <button key={t.id} onClick={()=>onNavigate(t.id)} className="w-full text-left bg-[#111827] border border-[#2a3a55] rounded-xl p-4 hover:border-blue-500/40 hover:bg-[#1a2234] transition group">
+            <button key={t.id} onClick={()=>onNavigate(t.id)} className="w-full text-left bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-4 hover:border-blue-500/40 hover:bg-[var(--bg-card)] transition group">
               <div className="flex items-center gap-3">
                 <I className="w-5 h-5 text-blue-400 flex-shrink-0"/>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-white text-sm">{t.label}</span>
-                    <span className="text-xs text-[#64748b]">— {t.desc}</span>
+                    <span className="font-semibold text-[var(--text)] text-sm">{t.label}</span>
+                    <span className="text-xs text-[var(--text-muted)]">— {t.desc}</span>
                   </div>
                   <p className="text-xs text-cyan-400/60 font-mono mt-1">Linked: {t.fields}</p>
                 </div>
@@ -557,12 +558,12 @@ function SummaryTab({ data, onNavigate }) {
       </div>
       {/* RACI Matrix (START HERE rows 6-20) */}
       <div>
-        <h3 className="text-sm font-semibold text-[#94a3b8] uppercase tracking-wider mb-4">RACI Matrix</h3>
-        <div className="bg-[#111827] border border-[#2a3a55] rounded-xl overflow-auto">
+        <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">RACI Matrix</h3>
+        <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl overflow-auto">
           <table className="w-full text-xs">
-            <thead><tr className="bg-[#1e3a5f]/50">
+            <thead><tr className="bg-blue-500/20/50">
               {["Tab","R(esponsible)","A(ccountable)","C(onsulted)","I(nformed)"].map(h=>(
-                <th key={h} className="text-left px-3 py-2.5 text-[#94a3b8] font-semibold">{h}</th>
+                <th key={h} className="text-left px-3 py-2.5 text-[var(--text-secondary)] font-semibold">{h}</th>
               ))}
             </tr></thead>
             <tbody>
@@ -581,12 +582,12 @@ function SummaryTab({ data, onNavigate }) {
                 {tab:"SF Lookup",R:"MKT",A:"MKT",C:"MKT",I:"AE, SE, SAE"},
                 {tab:"Training",R:"TAM, PMO",A:"TAM",C:"MKT, AE",I:"SAE, IMP, CSM"},
               ].map(r=>(
-                <tr key={r.tab} className="border-t border-[#2a3a55]/30 hover:bg-[#1a2234]">
-                  <td className="px-3 py-2 text-white font-medium">{r.tab}</td>
+                <tr key={r.tab} className="border-t border-[var(--border)]/30 hover:bg-[var(--bg-card)]">
+                  <td className="px-3 py-2 text-[var(--text)] font-medium">{r.tab}</td>
                   <td className="px-3 py-2 text-emerald-400">{r.R}</td>
                   <td className="px-3 py-2 text-amber-400">{r.A}</td>
                   <td className="px-3 py-2 text-cyan-400">{r.C}</td>
-                  <td className="px-3 py-2 text-[#94a3b8]">{r.I}</td>
+                  <td className="px-3 py-2 text-[var(--text-secondary)]">{r.I}</td>
                 </tr>
               ))}
             </tbody>
@@ -594,15 +595,15 @@ function SummaryTab({ data, onNavigate }) {
         </div>
       </div>
       <div>
-        <h3 className="text-sm font-semibold text-[#94a3b8] uppercase tracking-wider mb-4">Role Definitions</h3>
+        <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">Role Definitions</h3>
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
           {[{id:"AE",n:"Account Executive",s:"1-4"},{id:"SE",n:"Solutions Engineer",s:"1-2"},{id:"SAE",n:"Solutions Architect",s:"2"},{id:"PMO",n:"Program Management",s:"2-4"},{id:"INT",n:"Integrations",s:"2-3"},{id:"IMP",n:"Implementer",s:"3"},{id:"CSM",n:"Customer Success",s:"3-4"},{id:"MKT",n:"Marketplace",s:"2-3"},{id:"FE",n:"Field Engineer",s:"3-4"},{id:"AM",n:"Account Manager",s:"4"},{id:"TAM",n:"Training Acct Mgr",s:"3-4"},{id:"TSA",n:"Tech Solution Arch",s:"4"},{id:"SUP",n:"Support",s:"4"},{id:"CUST",n:"Customer",s:"1-4"}].map(r=>(
-            <div key={r.id} className="bg-[#111827] border border-[#2a3a55] rounded-lg p-3">
+            <div key={r.id} className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg p-3">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded">{r.id}</span>
-                <span className="text-xs text-white font-medium">{r.n}</span>
+                <span className="text-xs text-[var(--text)] font-medium">{r.n}</span>
               </div>
-              <p className="text-[10px] text-[#4a5568] mt-1">Stages: {r.s}</p>
+              <p className="text-[10px] text-[var(--text-muted)] mt-1">Stages: {r.s}</p>
             </div>
           ))}
         </div>
@@ -612,7 +613,7 @@ function SummaryTab({ data, onNavigate }) {
 }
 
 function PlaceholderTab({ title, desc }) {
-  return <div className="text-center py-16"><ClipboardList className="w-12 h-12 mx-auto mb-4 text-[#2a3a55]"/><h3 className="text-lg font-semibold mb-2">{title}</h3><p className="text-sm text-[#64748b] max-w-md mx-auto">{desc}</p></div>;
+  return <div className="text-center py-16"><ClipboardList className="w-12 h-12 mx-auto mb-4 text-[#2a3a55]"/><h3 className="text-lg font-semibold mb-2">{title}</h3><p className="text-sm text-[var(--text-muted)] max-w-md mx-auto">{desc}</p></div>;
 }
 
 // ═══ MAIN PAGE ═══
@@ -675,10 +676,10 @@ export default function ScopePage() {
 
   return (
     <div className="min-h-screen flex">
-      <aside className="w-60 flex-shrink-0 border-r border-[#2a3a55] bg-[#111827] sticky top-0 h-screen overflow-y-auto">
-        <div className="p-4 border-b border-[#2a3a55]">
-          <button onClick={()=>router.push("/dashboard")} className="flex items-center gap-2 text-sm text-[#64748b] hover:text-white transition mb-3"><ArrowLeft className="w-4 h-4"/> Dashboard</button>
-          <h2 className="font-bold text-white truncate">{data.fleet_name}</h2>
+      <aside className="w-60 flex-shrink-0 border-r border-[var(--border)] bg-[var(--bg-secondary)] sticky top-0 h-screen overflow-y-auto">
+        <div className="p-4 border-b border-[var(--border)]">
+          <button onClick={()=>router.push("/dashboard")} className="flex items-center gap-2 text-sm text-[var(--text-muted)] hover:text-[var(--text)] transition mb-3"><ArrowLeft className="w-4 h-4"/> Dashboard</button>
+          <h2 className="font-bold text-[var(--text)] truncate">{data.fleet_name}</h2>
           <div className="flex items-center gap-2 mt-1">
             <span className={`text-[10px] px-2 py-0.5 rounded border uppercase font-bold ${data.status==="active"?"text-emerald-400 bg-emerald-500/10 border-emerald-500/20":"text-amber-400 bg-amber-500/10 border-amber-500/20"}`}>{data.status}</span>
             <span className={`text-[10px] font-bold uppercase ${data.role==="owner"?"text-blue-400":data.role==="editor"?"text-emerald-400":"text-amber-400"}`}>{data.role}</span>
@@ -686,15 +687,15 @@ export default function ScopePage() {
         </div>
         <nav className="py-2">{TABS.map(t=>{const I=t.icon;const hasChildren=t.children&&t.children.length;const isExpanded=expandedGroups[t.id]||false;const childActive=hasChildren&&t.children.some(c=>c.id===tab);return(
           <div key={t.id}>
-            <button onClick={()=>{if(hasChildren){setExpandedGroups(p=>({...p,[t.id]:!p[t.id]}));if(!isExpanded&&!childActive)setTab(t.id);}else{setTab(t.id);}}} className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition border-l-2 ${tab===t.id||childActive?"bg-blue-500/10 text-blue-400 border-l-blue-400 font-semibold":"text-[#64748b] hover:text-white border-l-transparent"}`}><I className="w-4 h-4 flex-shrink-0"/><span className="flex-1 text-left">{t.label}</span>{hasChildren&&<ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded||childActive?"rotate-0":"rotate-[-90deg]"}`}/>}</button>
+            <button onClick={()=>{if(hasChildren){setExpandedGroups(p=>({...p,[t.id]:!p[t.id]}));if(!isExpanded&&!childActive)setTab(t.id);}else{setTab(t.id);}}} className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition border-l-2 ${tab===t.id||childActive?"bg-blue-500/10 text-blue-400 border-l-blue-400 font-semibold":"text-[var(--text-muted)] hover:text-[var(--text)] border-l-transparent"}`}><I className="w-4 h-4 flex-shrink-0"/><span className="flex-1 text-left">{t.label}</span>{hasChildren&&<ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded||childActive?"rotate-0":"rotate-[-90deg]"}`}/>}</button>
             {hasChildren&&(isExpanded||childActive)&&t.children.map(c=>(
-              <button key={c.id} onClick={()=>setTab(c.id)} className={`w-full flex items-center gap-3 pl-11 pr-4 py-2 text-xs transition border-l-2 ${tab===c.id?"bg-blue-500/10 text-blue-400 border-l-blue-400 font-semibold":"text-[#4a5568] hover:text-white border-l-transparent"}`}>{c.label}</button>
+              <button key={c.id} onClick={()=>setTab(c.id)} className={`w-full flex items-center gap-3 pl-11 pr-4 py-2 text-xs transition border-l-2 ${tab===c.id?"bg-blue-500/10 text-blue-400 border-l-blue-400 font-semibold":"text-[var(--text-muted)] hover:text-[var(--text)] border-l-transparent"}`}>{c.label}</button>
             ))}
           </div>
         );})}</nav>
       </aside>
       <main className="flex-1 min-w-0">
-        <div className="sticky top-0 z-40 bg-[#0a0e17]/90 backdrop-blur-sm border-b border-[#2a3a55] px-8 py-3 flex items-center justify-between">
+        <div className="sticky top-0 z-40 bg-[var(--bg)]/90 backdrop-blur-sm border-b border-[var(--border)] px-8 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h1 className="font-bold text-lg">{TABS.find(t=>t.id===tab)?.label || TABS.flatMap(t=>t.children||[]).find(c=>c.id===tab)?.label}</h1>
             {saving&&<span className="text-xs text-amber-400 animate-pulse">Saving…</span>}
@@ -703,6 +704,7 @@ export default function ScopePage() {
           </div>
           <div className="flex items-center gap-3">
             {!canEdit&&<span className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full">Read Only</span>}
+            <ThemeToggle />
             <a href={`/api/scopes/${scopeId}/export`} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-600/30 transition-colors"><Download className="w-3.5 h-3.5"/> Export Excel</a>
           </div>
         </div>

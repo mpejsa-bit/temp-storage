@@ -6,6 +6,8 @@ import {
   Plus, FileText, Clock, Users, Search, LogOut, MoreVertical,
   Trash2, Copy, ExternalLink, ChevronRight, Layers
 } from "lucide-react";
+import SalesforceSearchModal from "@/components/scope/SalesforceSearchModal";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 interface Scope {
   id: string;
@@ -24,7 +26,6 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState("");
-  const [newName, setNewName] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [fetchError, setFetchError] = useState("");
@@ -48,13 +49,14 @@ export default function DashboardPage() {
 
   useEffect(() => { fetchScopes(); }, []);
 
-  async function createScope() {
-    if (!newName.trim()) return;
+  async function handleCreateScope(name: string, sfData: any | null) {
     setCreating(true);
+    const body: any = { fleet_name: name };
+    if (sfData) body.sf_data = sfData;
     const res = await fetch("/api/scopes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fleet_name: newName }),
+      body: JSON.stringify(body),
     });
     if (res.ok) {
       const { id } = await res.json();
@@ -102,19 +104,22 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <header className="border-b border-[#2a3a55] bg-[#111827]/80 backdrop-blur-sm sticky top-0 z-50">
+      <header className="border-b border-[var(--border)] bg-[var(--bg-secondary)]/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Layers className="w-6 h-6 text-blue-400" />
             <span className="font-bold text-lg">Scoping Doc Platform</span>
           </div>
-          <button
-            onClick={() => signOut({ callbackUrl: "/login" })}
-            className="flex items-center gap-2 text-sm text-[#64748b] hover:text-white transition"
-          >
-            <LogOut className="w-4 h-4" />
-            Sign out
-          </button>
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            <button
+              onClick={() => signOut({ callbackUrl: "/login" })}
+              className="flex items-center gap-2 text-sm text-[var(--text-muted)] hover:text-[var(--text)] transition"
+            >
+              <LogOut className="w-4 h-4" />
+              Sign out
+            </button>
+          </div>
         </div>
       </header>
 
@@ -123,7 +128,7 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-2xl font-bold mb-1">Scoping Documents</h1>
-            <p className="text-[#64748b] text-sm">{scopes.length} document{scopes.length !== 1 ? "s" : ""}</p>
+            <p className="text-[var(--text-muted)] text-sm">{scopes.length} document{scopes.length !== 1 ? "s" : ""}</p>
           </div>
           <button
             onClick={() => setShowCreate(true)}
@@ -135,43 +140,21 @@ export default function DashboardPage() {
         </div>
 
         {/* Create Modal */}
-        {showCreate && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setShowCreate(false)}>
-            <div className="bg-[#1a2234] border border-[#2a3a55] rounded-xl p-8 w-full max-w-md" onClick={e => e.stopPropagation()}>
-              <h2 className="text-xl font-bold mb-4">New Scoping Document</h2>
-              <label className="block text-sm text-[#94a3b8] mb-2">Fleet Name</label>
-              <input
-                type="text"
-                value={newName}
-                onChange={e => setNewName(e.target.value)}
-                placeholder="e.g. Acme Trucking"
-                className="w-full px-4 py-3 bg-[#111827] border border-[#2a3a55] rounded-lg text-white placeholder-[#64748b] focus:outline-none focus:border-blue-500 mb-6"
-                autoFocus
-                onKeyDown={e => e.key === "Enter" && createScope()}
-              />
-              <div className="flex gap-3 justify-end">
-                <button onClick={() => setShowCreate(false)} className="px-4 py-2 text-[#94a3b8] hover:text-white transition">Cancel</button>
-                <button
-                  onClick={createScope}
-                  disabled={creating || !newName.trim()}
-                  className="px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-medium rounded-lg transition"
-                >
-                  {creating ? "Creating…" : "Create"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <SalesforceSearchModal
+          open={showCreate}
+          onClose={() => setShowCreate(false)}
+          onCreateScope={handleCreateScope}
+        />
 
         {/* Search */}
         <div className="relative mb-6">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#64748b]" />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
           <input
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search scoping docs…"
-            className="w-full pl-11 pr-4 py-3 bg-[#111827] border border-[#2a3a55] rounded-lg text-white placeholder-[#64748b] focus:outline-none focus:border-blue-500 transition"
+            className="w-full pl-11 pr-4 py-3 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500 transition"
           />
         </div>
 
@@ -181,13 +164,13 @@ export default function DashboardPage() {
             <div className="w-8 h-8 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : fetchError ? (
-          <div className="text-center py-20 text-[#64748b]">
+          <div className="text-center py-20 text-[var(--text-muted)]">
             <FileText className="w-12 h-12 mx-auto mb-4 opacity-30" />
             <p className="text-lg mb-2 text-red-400">{fetchError}</p>
             <button onClick={fetchScopes} className="text-sm text-blue-400 hover:text-blue-300">Retry</button>
           </div>
         ) : filtered.length === 0 ? (
-          <div className="text-center py-20 text-[#64748b]">
+          <div className="text-center py-20 text-[var(--text-muted)]">
             <FileText className="w-12 h-12 mx-auto mb-4 opacity-30" />
             <p className="text-lg mb-2">{search ? "No matching documents" : "No scoping documents yet"}</p>
             <p className="text-sm">Click &ldquo;New Scoping Doc&rdquo; to get started</p>
@@ -197,7 +180,7 @@ export default function DashboardPage() {
             {filtered.map(scope => (
               <div
                 key={scope.id}
-                className="group bg-[#1a2234] border border-[#2a3a55] rounded-xl p-5 hover:border-blue-500/40 hover:bg-[#1e2840] transition-all cursor-pointer relative"
+                className="group bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-5 hover:border-blue-500/40 transition-all cursor-pointer relative"
                 onClick={() => router.push(`/scopes/${scope.id}`)}
               >
                 <div className="flex items-center justify-between">
@@ -206,8 +189,8 @@ export default function DashboardPage() {
                       <FileText className="w-5 h-5 text-blue-400" />
                     </div>
                     <div className="min-w-0">
-                      <h3 className="font-semibold text-white truncate">{scope.fleet_name}</h3>
-                      <div className="flex items-center gap-3 mt-1 text-xs text-[#64748b]">
+                      <h3 className="font-semibold truncate">{scope.fleet_name}</h3>
+                      <div className="flex items-center gap-3 mt-1 text-xs text-[var(--text-muted)]">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded border text-[10px] uppercase tracking-wider font-semibold ${statusColors[scope.status]}`}>
                           {scope.status}
                         </span>
@@ -235,13 +218,13 @@ export default function DashboardPage() {
                     <div className="relative" onClick={e => e.stopPropagation()}>
                       <button
                         onClick={() => setMenuOpen(menuOpen === scope.id ? null : scope.id)}
-                        className="p-2 hover:bg-white/5 rounded-lg transition"
+                        className="p-2 hover:bg-[var(--bg-secondary)] rounded-lg transition"
                       >
-                        <MoreVertical className="w-4 h-4 text-[#64748b]" />
+                        <MoreVertical className="w-4 h-4 text-[var(--text-muted)]" />
                       </button>
                       {menuOpen === scope.id && (
-                        <div className="absolute right-0 top-full mt-1 bg-[#1a2234] border border-[#2a3a55] rounded-lg shadow-xl py-1 z-10 min-w-[160px]">
-                          <button onClick={() => handleClone(scope.id)} className="w-full px-4 py-2 text-left text-sm text-[#94a3b8] hover:text-white hover:bg-white/5 flex items-center gap-2">
+                        <div className="absolute right-0 top-full mt-1 bg-[var(--bg-card)] border border-[var(--border)] rounded-lg shadow-xl py-1 z-10 min-w-[160px]">
+                          <button onClick={() => handleClone(scope.id)} className="w-full px-4 py-2 text-left text-sm text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--bg-secondary)] flex items-center gap-2">
                             <Copy className="w-3.5 h-3.5" /> Clone
                           </button>
                           {scope.role === "owner" && (
@@ -252,7 +235,7 @@ export default function DashboardPage() {
                         </div>
                       )}
                     </div>
-                    <ChevronRight className="w-5 h-5 text-[#2a3a55] group-hover:text-blue-400 transition" />
+                    <ChevronRight className="w-5 h-5 text-[var(--border)] group-hover:text-blue-400 transition" />
                   </div>
                 </div>
               </div>

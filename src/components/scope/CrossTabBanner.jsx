@@ -3,10 +3,10 @@ import { ArrowRight } from "lucide-react";
 
 export function LinkedField({ label, value, sourceTab }) {
   return (
-    <div className="flex justify-between py-1.5 border-b border-[#2a3a55]/30 group">
-      <span className="text-[#64748b] text-sm">{label}</span>
+    <div className="flex justify-between py-1.5 border-b border-[var(--border)]/30 group">
+      <span className="text-[var(--text-muted)] text-sm">{label}</span>
       <div className="flex items-center gap-2">
-        <span className="text-white font-medium text-sm">{value != null && value !== "" ? value : "—"}</span>
+        <span className="text-[var(--text)] font-medium text-sm">{value != null && value !== "" ? value : "—"}</span>
         <span className="text-[10px] text-cyan-400/60 opacity-0 group-hover:opacity-100 transition font-mono flex items-center gap-1">
           <ArrowRight className="w-3 h-3"/>{sourceTab}
         </span>
@@ -24,7 +24,7 @@ export function CrossTabBanner({ links }) {
       </div>
       <div className="flex flex-wrap gap-x-6 gap-y-1">
         {links.map((l,i)=>(
-          <span key={i} className="text-xs text-[#64748b]">
+          <span key={i} className="text-xs text-[var(--text-muted)]">
             <span className="text-cyan-400/70 font-mono">{l.field}</span>
             <span className="mx-1">←</span>
             <span className="text-blue-400/70">{l.source}</span>
@@ -51,12 +51,12 @@ export function FleetSummary({ data }) {
     " PS Marketplace app(s) and ",data.stats?.upas||0," User Provided Application(s)/Website(s)."
   ];
   return (
-    <div className="bg-[#111827] border border-[#2a3a55] rounded-xl p-5">
+    <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-5">
       <div className="flex items-center gap-2 mb-3">
         <span className="text-xs font-semibold text-blue-400 uppercase tracking-wider">Fleet Overview</span>
         <span className="text-[10px] text-cyan-400/60 font-mono">= START HERE!B2</span>
       </div>
-      <p className="text-sm text-[#94a3b8] leading-relaxed">{parts.join("")}</p>
+      <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{parts.join("")}</p>
       <div className="mt-3 flex flex-wrap gap-2">
         {["Overview","Contacts","Stats"].map(t=>(
           <span key={t} className="text-[10px] px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/15 font-mono">← {t}</span>

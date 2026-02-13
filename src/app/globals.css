@@ -4,7 +4,40 @@
 
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
-:root {
+/* Light — soft warm whites */
+:root, .light {
+  --bg: #f5f5f0;
+  --bg-secondary: #eae9e4;
+  --bg-card: #fafaf7;
+  --border: #d5d3cc;
+  --accent: #4a7cc9;
+  --accent-cyan: #3a8a9e;
+  --accent-emerald: #3d8b6e;
+  --accent-amber: #b8862b;
+  --accent-rose: #c4475a;
+  --text: #2c2c2a;
+  --text-secondary: #5c5b57;
+  --text-muted: #8a8880;
+}
+
+/* Dim — muted midtone, easy on the eyes */
+.dim {
+  --bg: #2a2d35;
+  --bg-secondary: #323640;
+  --bg-card: #383c48;
+  --border: #4a4e5a;
+  --accent: #6da1e0;
+  --accent-cyan: #5cb8cc;
+  --accent-emerald: #5cb89a;
+  --accent-amber: #d4a54a;
+  --accent-rose: #e06680;
+  --text: #d4d4d0;
+  --text-secondary: #9a9a96;
+  --text-muted: #6e6e6a;
+}
+
+/* Dark — deep navy (original) */
+.dark {
   --bg: #0a0e17;
   --bg-secondary: #111827;
   --bg-card: #1a2234;
@@ -17,6 +50,22 @@
   --text: #e8edf5;
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
+}
+
+/* Midnight — true black AMOLED */
+.midnight {
+  --bg: #000000;
+  --bg-secondary: #0a0a0a;
+  --bg-card: #121212;
+  --border: #1e1e1e;
+  --accent: #5b9cf6;
+  --accent-cyan: #22d3ee;
+  --accent-emerald: #34d399;
+  --accent-amber: #fbbf24;
+  --accent-rose: #fb7185;
+  --text: #f0f0f0;
+  --text-secondary: #a0a0a0;
+  --text-muted: #606060;
 }
 
 * { box-sizing: border-box; }

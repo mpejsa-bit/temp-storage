@@ -2,11 +2,11 @@
 const nextConfig = {
   output: "standalone",
   experimental: {
-    serverComponentsExternalPackages: ['sql.js'],
+    serverComponentsExternalPackages: ['sql.js', 'jsforce'],
   },
   webpack: (config, { isServer }) => {
     if (isServer) {
-      config.externals.push('sql.js');
+      config.externals.push('sql.js', 'jsforce');
     }
     return config;
   },

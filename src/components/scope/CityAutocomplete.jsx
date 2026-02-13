@@ -115,11 +115,11 @@ export default function CityAutocomplete({ value, onChange, onCitySelect, disabl
     setTimeout(() => setIsOpen(false), 150);
   };
 
-  const cls = "w-full px-3 py-2 bg-[#111827] border border-[#2a3a55] rounded-lg text-white text-sm placeholder-[#4a5568] focus:outline-none focus:border-blue-500 transition disabled:opacity-50";
+  const cls = "w-full px-3 py-2 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-[var(--text)] text-sm placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500 transition disabled:opacity-50";
 
   return (
     <div className="relative">
-      <label className="block text-xs font-medium text-[#64748b] mb-1.5 uppercase tracking-wider">{label}</label>
+      <label className="block text-xs font-medium text-[var(--text-muted)] mb-1.5 uppercase tracking-wider">{label}</label>
       <input
         ref={inputRef}
         type="text"
@@ -141,7 +141,7 @@ export default function CityAutocomplete({ value, onChange, onCitySelect, disabl
         <ul
           ref={listRef}
           role="listbox"
-          className="absolute z-50 w-full mt-1 max-h-60 overflow-auto bg-[#111827] border border-[#2a3a55] rounded-lg shadow-lg shadow-black/50"
+          className="absolute z-50 w-full mt-1 max-h-60 overflow-auto bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg shadow-lg shadow-black/50"
         >
           {suggestions.map((city, index) => (
             <li
@@ -153,11 +153,11 @@ export default function CityAutocomplete({ value, onChange, onCitySelect, disabl
               className={`px-3 py-2 text-sm cursor-pointer transition ${
                 index === highlightedIndex
                   ? "bg-blue-500/20 text-blue-300"
-                  : "text-white hover:bg-[#1a2234]"
+                  : "text-[var(--text)] hover:bg-[var(--bg-card)]"
               }`}
             >
               <HighlightedText text={`${city.city}, ${city.state}`} query={inputValue} />
-              <span className="ml-2 text-[10px] text-[#4a5568]">{city.timezone}</span>
+              <span className="ml-2 text-[10px] text-[var(--text-muted)]">{city.timezone}</span>
             </li>
           ))}
         </ul>
