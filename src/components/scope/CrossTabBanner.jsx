@@ -6,7 +6,7 @@ export function LinkedField({ label, value, sourceTab }) {
     <div className="flex justify-between py-1.5 border-b border-[#2a3a55]/30 group">
       <span className="text-[#64748b] text-sm">{label}</span>
       <div className="flex items-center gap-2">
-        <span className="text-white font-medium text-sm">{value || "—"}</span>
+        <span className="text-white font-medium text-sm">{value != null && value !== "" ? value : "—"}</span>
         <span className="text-[10px] text-cyan-400/60 opacity-0 group-hover:opacity-100 transition font-mono flex items-center gap-1">
           <ArrowRight className="w-3 h-3"/>{sourceTab}
         </span>
@@ -41,7 +41,7 @@ export function FleetSummary({ data }) {
   const parts = [
     data.fleet_name," is a fleet located in ",ov.hq_location||"—",
     ". Their Executive Sponsor is ",sponsor?.name||"—",", ",sponsor?.title||"—",". ",
-    data.fleet_name," is a ",ov.fleet_size_label||"—"," with ",ov.num_tractors||"—",
+    data.fleet_name," is a ",ov.fleet_size_label||"—"," with ",ov.num_tractors ?? "—",
     " tractors. They are currently using ",ov.current_tsp||"—"," as their TSP and ",
     ov.current_tms||"—"," as their TMS in a ",ov.current_tms_type||"—"," environment. ",
     "They will be leveraging Platform Science's ",ov.ps_platform||"—"," platform. ",

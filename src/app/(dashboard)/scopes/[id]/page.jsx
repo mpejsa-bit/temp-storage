@@ -638,11 +638,13 @@ export default function ScopePage() {
 
   useEffect(()=>{load();},[load]);
 
+  const [saveErr,setSaveErr] = useState("");
   const save = async(section,d,action)=>{
-    setSaving(true);
+    setSaving(true);setSaveErr("");
     const r=await fetch(`/api/scopes/${scopeId}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({section,data:d,action})});
     setSaving(false);
     if(r.ok){setSaved(true);setTimeout(()=>setSaved(false),2000);await load();}
+    else{const e=await r.json().catch(()=>({}));setSaveErr(e.error||"Save failed");setTimeout(()=>setSaveErr(""),5000);}
     return r.ok;
   };
 
@@ -697,6 +699,7 @@ export default function ScopePage() {
             <h1 className="font-bold text-lg">{TABS.find(t=>t.id===tab)?.label || TABS.flatMap(t=>t.children||[]).find(c=>c.id===tab)?.label}</h1>
             {saving&&<span className="text-xs text-amber-400 animate-pulse">Saving…</span>}
             {saved&&<span className="text-xs text-emerald-400 flex items-center gap-1"><Check className="w-3 h-3"/> Saved</span>}
+            {saveErr&&<span className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded">{saveErr}</span>}
           </div>
           <div className="flex items-center gap-3">
             {!canEdit&&<span className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full">Read Only</span>}
