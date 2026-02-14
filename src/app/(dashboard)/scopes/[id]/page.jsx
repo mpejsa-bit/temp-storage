@@ -63,12 +63,13 @@ function Field({ label, value, onChange, disabled, type="text", options, placeho
   );
 }
 
-function OverviewTab({ data, canEdit, onSave }) {
+function OverviewTab({ data, canEdit, onSave, refData }) {
   const today = new Date().toISOString().split('T')[0];
   const initOv = (o) => ({...o, date_lead_provided: o?.date_lead_provided || today});
   const [ov, setOv] = useState(initOv(data.overview||{}));
   const set = (k,v) => setOv(p=>({...p,[k]:v}));
   useEffect(()=>{setOv(initOv(data.overview||{}))},[data.overview]);
+  const ref = (cat, fallback=[]) => refData[cat]?.length ? refData[cat] : fallback;
   return (
     <div className="space-y-8">
       <div className="bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/20 rounded-xl p-5">
@@ -79,12 +80,12 @@ function OverviewTab({ data, canEdit, onSave }) {
         <div className="grid grid-cols-2 gap-4">
           <Field label="Fleet Name" value={ov.fleet_name??data.fleet_name} onChange={v=>set("fleet_name",v)} disabled={!canEdit}/>
           <CityAutocomplete label="HQ Location" value={ov.hq_location} onChange={v=>set("hq_location",v)} onCitySelect={(city)=>{set("hq_location",`${city.city}, ${city.state}`);set("fleet_timezone",city.timezone);}} disabled={!canEdit} placeholder="City, ST"/>
-          <Field label="PS Platform" value={ov.ps_platform} onChange={v=>set("ps_platform",v)} disabled={!canEdit} type="select" options={["PS Enterprise","PS+"]}/>
-          <Field label="Fleet Timezone" value={ov.fleet_timezone} onChange={v=>set("fleet_timezone",v)} disabled={!canEdit} type="select" options={["Eastern","Central","Mountain","Pacific","Alaska","Hawaii"]}/>
-          <Field label="Current Technology" value={ov.current_technology} onChange={v=>set("current_technology",v)} disabled={!canEdit} type="select" options={["Pre-Mobility","Mobility"]}/>
-          <Field label="Fleet Persona" value={ov.fleet_persona} onChange={v=>set("fleet_persona",v)} disabled={!canEdit} type="select" options={["Innovator","Early Adopter","Early Majority","Late Majority","Influencer"]}/>
-          <Field label="Type of Company" value={ov.type_of_company} onChange={v=>set("type_of_company",v)} disabled={!canEdit} type="select" options={["Private Fleet/Shipper","Brokerage/3PL","Maintenance Service Center","Fuel/Energy","Autohauler"]}/>
-          <Field label="Type of Operation" value={ov.type_of_operation} onChange={v=>set("type_of_operation",v)} disabled={!canEdit} type="select" options={["General Freight","Reefer","LTL","Retail/Wholesale","Bulk/Petrol/Chem/Tanker","Intermodal"]}/>
+          <Field label="PS Platform" value={ov.ps_platform} onChange={v=>set("ps_platform",v)} disabled={!canEdit} type="select" options={ref("ps_platform",["PS Enterprise","PS+"])}/>
+          <Field label="Fleet Timezone" value={ov.fleet_timezone} onChange={v=>set("fleet_timezone",v)} disabled={!canEdit} type="select" options={ref("fleet_timezone",["Eastern","Central","Mountain","Pacific","Alaska","Hawaii"])}/>
+          <Field label="Current Technology" value={ov.current_technology} onChange={v=>set("current_technology",v)} disabled={!canEdit} type="select" options={ref("current_technology",["Pre-Mobility","Mobility"])}/>
+          <Field label="Fleet Persona" value={ov.fleet_persona} onChange={v=>set("fleet_persona",v)} disabled={!canEdit} type="select" options={ref("fleet_persona",["Innovator","Early Adopter","Early Majority","Late Majority","Influencer"])}/>
+          <Field label="Type of Company" value={ov.type_of_company} onChange={v=>set("type_of_company",v)} disabled={!canEdit} type="select" options={ref("company_type",["Private Fleet/Shipper","Brokerage/3PL","Maintenance Service Center","Fuel/Energy","Autohauler"])}/>
+          <Field label="Type of Operation" value={ov.type_of_operation} onChange={v=>set("type_of_operation",v)} disabled={!canEdit} type="select" options={ref("operation_type",["General Freight","Reefer","LTL","Retail/Wholesale","Bulk/Petrol/Chem/Tanker","Intermodal"])}/>
         </div>
       </section>
       <section><h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">Fleet Size</h3>
@@ -97,11 +98,11 @@ function OverviewTab({ data, canEdit, onSave }) {
       <section><h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">TMS & Technology</h3>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Current TSP" value={ov.current_tsp} onChange={v=>set("current_tsp",v)} disabled={!canEdit} placeholder="e.g. Omni"/>
-          <Field label="Current TMS" value={ov.current_tms} onChange={v=>set("current_tms",v)} disabled={!canEdit} placeholder="e.g. McLeod"/>
-          <Field label="Current TMS Type" value={ov.current_tms_type} onChange={v=>set("current_tms_type",v)} disabled={!canEdit} type="select" options={["Cloud","Hosted","SaaS","On-Prem"]}/>
+          <Field label="Current TMS" value={ov.current_tms} onChange={v=>set("current_tms",v)} disabled={!canEdit} type="select" options={ref("tms_provider",["ICC/Innovative","McLeod","TMW","Trimble","MercuryGate","Oracle","SAP","BluJay","Descartes","Other:"])}/>
+          <Field label="Current TMS Type" value={ov.current_tms_type} onChange={v=>set("current_tms_type",v)} disabled={!canEdit} type="select" options={ref("tms_type",["Cloud","Hosted","SaaS","On-Prem"])}/>
           <Field label="Current TMS Version" value={ov.current_tms_version} onChange={v=>set("current_tms_version",v)} disabled={!canEdit}/>
-          <Field label="Future TMS" value={ov.future_tms} onChange={v=>set("future_tms",v)} disabled={!canEdit}/>
-          <Field label="Future TMS Type" value={ov.future_tms_type} onChange={v=>set("future_tms_type",v)} disabled={!canEdit} type="select" options={["Cloud","Hosted","SaaS","On-Prem"]}/>
+          <Field label="Future TMS" value={ov.future_tms} onChange={v=>set("future_tms",v)} disabled={!canEdit} type="select" options={ref("tms_provider",["ICC/Innovative","McLeod","TMW","Trimble","MercuryGate","Oracle","SAP","BluJay","Descartes","Other:"])}/>
+          <Field label="Future TMS Type" value={ov.future_tms_type} onChange={v=>set("future_tms_type",v)} disabled={!canEdit} type="select" options={ref("tms_type",["Cloud","Hosted","SaaS","On-Prem"])}/>
         </div>
       </section>
       <section><h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">Links & References</h3>
@@ -162,21 +163,21 @@ function OverviewTab({ data, canEdit, onSave }) {
       {/* Fuel Haulers & Shipment Details (rows 92-109) */}
       <section><h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">Fuel Haulers & Shipment Details</h3>
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Do you have tankers?" value={ov.has_tankers} onChange={v=>set("has_tankers",v)} disabled={!canEdit} type="select" options={["Yes","No"]}/>
+          <Field label="Do you have tankers?" value={ov.has_tankers} onChange={v=>set("has_tankers",v)} disabled={!canEdit} type="select" options={ref("yes_no",["Yes","No"])}/>
           <Field label="# of single compartments?" value={ov.single_compartments} onChange={v=>set("single_compartments",v)} disabled={!canEdit}/>
           <Field label="# of multiple compartments?" value={ov.multiple_compartments} onChange={v=>set("multiple_compartments",v)} disabled={!canEdit}/>
           <Field label="Rented or foreign trailers?" value={ov.rented_foreign_trailers} onChange={v=>set("rented_foreign_trailers",v)} disabled={!canEdit} type="select" options={["Rented","Foreign","Both"]}/>
-          <Field label="Do you use containers?" value={ov.use_containers} onChange={v=>set("use_containers",v)} disabled={!canEdit} type="select" options={["Yes","No"]}/>
-          <Field label="Do you use chassis?" value={ov.use_chassis} onChange={v=>set("use_chassis",v)} disabled={!canEdit} type="select" options={["Yes","No"]}/>
-          <Field label="Handle parcel shipments?" value={ov.parcel_shipments} onChange={v=>set("parcel_shipments",v)} disabled={!canEdit} type="select" options={["Yes","No"]}/>
-          <Field label="Handle multi-stop orders?" value={ov.multi_stop_orders} onChange={v=>set("multi_stop_orders",v)} disabled={!canEdit} type="select" options={["Yes","No"]}/>
+          <Field label="Do you use containers?" value={ov.use_containers} onChange={v=>set("use_containers",v)} disabled={!canEdit} type="select" options={ref("yes_no",["Yes","No"])}/>
+          <Field label="Do you use chassis?" value={ov.use_chassis} onChange={v=>set("use_chassis",v)} disabled={!canEdit} type="select" options={ref("yes_no",["Yes","No"])}/>
+          <Field label="Handle parcel shipments?" value={ov.parcel_shipments} onChange={v=>set("parcel_shipments",v)} disabled={!canEdit} type="select" options={ref("yes_no",["Yes","No"])}/>
+          <Field label="Handle multi-stop orders?" value={ov.multi_stop_orders} onChange={v=>set("multi_stop_orders",v)} disabled={!canEdit} type="select" options={ref("yes_no",["Yes","No"])}/>
           <Field label="Commodities hauled" value={ov.commodities_hauled} onChange={v=>set("commodities_hauled",v)} disabled={!canEdit} wide/>
-          <Field label="Multi-mode transport?" value={ov.multi_mode_transport} onChange={v=>set("multi_mode_transport",v)} disabled={!canEdit} type="select" options={["Yes","No"]}/>
+          <Field label="Multi-mode transport?" value={ov.multi_mode_transport} onChange={v=>set("multi_mode_transport",v)} disabled={!canEdit} type="select" options={ref("yes_no",["Yes","No"])}/>
           <Field label="How handle split loads?" value={ov.split_loads} onChange={v=>set("split_loads",v)} disabled={!canEdit}/>
-          <Field label="Multi-leg shipments?" value={ov.multi_leg_shipments} onChange={v=>set("multi_leg_shipments",v)} disabled={!canEdit} type="select" options={["Yes","No"]}/>
-          <Field label="Freight via rail?" value={ov.freight_via_rail} onChange={v=>set("freight_via_rail",v)} disabled={!canEdit} type="select" options={["Yes","No"]}/>
-          <Field label="Haul petroleum/liquids?" value={ov.petroleum_liquids} onChange={v=>set("petroleum_liquids",v)} disabled={!canEdit} type="select" options={["Yes","No"]}/>
-          <Field label="Consolidate loads?" value={ov.consolidate_loads} onChange={v=>set("consolidate_loads",v)} disabled={!canEdit} type="select" options={["Yes","No"]}/>
+          <Field label="Multi-leg shipments?" value={ov.multi_leg_shipments} onChange={v=>set("multi_leg_shipments",v)} disabled={!canEdit} type="select" options={ref("yes_no",["Yes","No"])}/>
+          <Field label="Freight via rail?" value={ov.freight_via_rail} onChange={v=>set("freight_via_rail",v)} disabled={!canEdit} type="select" options={ref("yes_no",["Yes","No"])}/>
+          <Field label="Haul petroleum/liquids?" value={ov.petroleum_liquids} onChange={v=>set("petroleum_liquids",v)} disabled={!canEdit} type="select" options={ref("yes_no",["Yes","No"])}/>
+          <Field label="Consolidate loads?" value={ov.consolidate_loads} onChange={v=>set("consolidate_loads",v)} disabled={!canEdit} type="select" options={ref("yes_no",["Yes","No"])}/>
           <Field label="Pick-up/drop-off process" value={ov.pickup_dropoff_process} onChange={v=>set("pickup_dropoff_process",v)} disabled={!canEdit} wide/>
         </div>
       </section>
@@ -630,6 +631,7 @@ export default function ScopePage() {
   const [expandedGroups, setExpandedGroups] = useState({});
 
   const canEdit = data?.role==="owner"||data?.role==="editor";
+  const [refData, setRefData] = useState({});
 
   const load = useCallback(async()=>{
     const r=await fetch(`/api/scopes/${scopeId}`);
@@ -637,7 +639,14 @@ export default function ScopePage() {
     setData(await r.json());setLoading(false);
   },[scopeId]);
 
+  const loadRef = useCallback(async()=>{
+    const r=await fetch("/api/ref?table=masterdata");
+    if(r.ok){const d=await r.json();const mapped={};for(const[cat,items]of Object.entries(d.data||{})){mapped[cat]=(items||[]).map(i=>i.value);}setRefData(mapped);}
+  },[]);
+
   useEffect(()=>{load();},[load]);
+  useEffect(()=>{loadRef();},[loadRef]);
+  useEffect(()=>{if(tab==="overview") loadRef();},[tab, loadRef]);
 
   const [saveErr,setSaveErr] = useState("");
   const save = async(section,d,action)=>{
@@ -655,7 +664,7 @@ export default function ScopePage() {
   const renderTab = () => {
     switch(tab){
       case "summary": return <SummaryTab data={data} onNavigate={setTab}/>;
-      case "overview": return <OverviewTab data={data} canEdit={canEdit} onSave={save}/>;
+      case "overview": return <OverviewTab data={data} canEdit={canEdit} onSave={save} refData={refData}/>;
       case "contacts": return <ContactsTab data={data} canEdit={canEdit} onSave={save}/>;
       case "marketplace": return <MarketplaceTab data={data} canEdit={canEdit} onSave={save}/>;
       case "solution": return <><SolutionTab data={data} canEdit={canEdit} onSave={save}/><SolutionLinkedSection data={data}/></>;

@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Database, Search, Plus, X, Check, Pencil } from "lucide-react";
+import { Database, Search, Plus, X, Check, Pencil, GripVertical } from "lucide-react";
 
 export default function MasterDataTab() {
   const [data, setData] = useState({});
@@ -98,6 +98,60 @@ export default function MasterDataTab() {
 
   const cancelDelete = () => {
     setDeletingId(null);
+  };
+
+  // --- Drag and drop ---
+  const dragState = useRef({ cat: null, dragIdx: null });
+  const [dragOverIdx, setDragOverIdx] = useState(null);
+  const [dragCat, setDragCat] = useState(null);
+
+  const onDragStart = (cat, idx) => (e) => {
+    dragState.current = { cat, dragIdx: idx };
+    setDragCat(cat);
+    e.dataTransfer.effectAllowed = "move";
+    // Minimal ghost — use a transparent pixel
+    const ghost = document.createElement("div");
+    ghost.style.position = "absolute";
+    ghost.style.top = "-1000px";
+    document.body.appendChild(ghost);
+    e.dataTransfer.setDragImage(ghost, 0, 0);
+    setTimeout(() => document.body.removeChild(ghost), 0);
+  };
+
+  const onDragOver = (cat, idx) => (e) => {
+    e.preventDefault();
+    if (dragState.current.cat !== cat) return;
+    e.dataTransfer.dropEffect = "move";
+    setDragOverIdx(idx);
+  };
+
+  const onDrop = (cat) => async (e) => {
+    e.preventDefault();
+    const { cat: srcCat, dragIdx } = dragState.current;
+    if (srcCat !== cat || dragIdx === null || dragOverIdx === null || dragIdx === dragOverIdx) {
+      setDragOverIdx(null);
+      setDragCat(null);
+      return;
+    }
+    const items = data[cat] || [];
+    const reordered = [...items];
+    const [moved] = reordered.splice(dragIdx, 1);
+    reordered.splice(dragOverIdx, 0, moved);
+    setData(prev => ({ ...prev, [cat]: reordered }));
+    setDragOverIdx(null);
+    setDragCat(null);
+    dragState.current = { cat: null, dragIdx: null };
+    await fetch("/api/ref", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ table: "masterdata", category: cat, orderedIds: reordered.map(i => i.id) }),
+    });
+  };
+
+  const onDragEnd = () => {
+    setDragOverIdx(null);
+    setDragCat(null);
+    dragState.current = { cat: null, dragIdx: null };
   };
 
   const handleNewCategory = async () => {
@@ -198,9 +252,23 @@ export default function MasterDataTab() {
                   </button>
                 </div>
               </div>
-              <div className="p-3 space-y-1 max-h-[250px] overflow-y-auto">
-                {filtered.map(item => (
-                  <div key={item.id} className="group flex items-center gap-2 px-2 py-1.5 rounded hover:bg-[var(--bg-card)] transition text-xs">
+              <div className="p-3 space-y-0 max-h-[250px] overflow-y-auto" onDrop={onDrop(cat)} onDragOver={(e) => e.preventDefault()}>
+                {filtered.map((item, idx) => {
+                  const isDragging = dragCat === cat && dragState.current.dragIdx === idx;
+                  const isOver = dragCat === cat && dragOverIdx === idx;
+                  return (
+                  <div
+                    key={item.id}
+                    draggable={!search && !editingId && !pendingEditId && !deletingId}
+                    onDragStart={onDragStart(cat, idx)}
+                    onDragOver={onDragOver(cat, idx)}
+                    onDragEnd={onDragEnd}
+                    className={`group flex items-center gap-2 px-2 py-1.5 rounded transition text-xs ${isDragging ? "opacity-30" : "hover:bg-[var(--bg-card)]"} ${isOver && !isDragging ? "border-t-2 border-blue-400" : "border-t-2 border-transparent"}`}
+                  >
+                    {/* Drag handle */}
+                    {!search && (
+                      <GripVertical className="w-3 h-3 flex-shrink-0 text-[var(--text-muted)]/30 opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing transition" />
+                    )}
                     <span className="w-1.5 h-1.5 rounded-full bg-blue-400/50 flex-shrink-0" />
 
                     {/* Delete confirmation */}
@@ -266,7 +334,7 @@ export default function MasterDataTab() {
                       </>
                     )}
                   </div>
-                ))}
+                  ); })}
                 {/* Inline add input */}
                 {addingTo === cat && (
                   <div className="flex items-center gap-2 px-2 py-1.5">

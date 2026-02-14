@@ -98,6 +98,23 @@ export async function PATCH(req: Request) {
   return NextResponse.json({ ok: true });
 }
 
+export async function PUT(req: Request) {
+  const body = await req.json();
+  const { table, category, orderedIds } = body;
+
+  if (table !== "masterdata" || !category || !Array.isArray(orderedIds)) {
+    return NextResponse.json({ error: "Required: table='masterdata', category, orderedIds[]" }, { status: 400 });
+  }
+
+  const db = await getDb();
+  for (let i = 0; i < orderedIds.length; i++) {
+    db.run("UPDATE ref_master_data SET sort_order = ? WHERE id = ? AND category = ?", [i, orderedIds[i], category]);
+  }
+  saveDb();
+
+  return NextResponse.json({ ok: true });
+}
+
 export async function DELETE(req: Request) {
   const body = await req.json();
   const { table, id } = body;
