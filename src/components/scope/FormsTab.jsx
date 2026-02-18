@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { CrossTabBanner } from "./CrossTabBanner";
 import { Plus, Trash2, ClipboardList, ChevronDown, ChevronRight } from "lucide-react";
+import { useDebouncedCallback } from "@/hooks/useDebounce";
 
 const FORM_CATEGORIES = ["All", "Pre-Trip", "Post-Trip", "Dispatch", "Safety", "Compliance", "Custom"];
 const FIELD_TYPES = ["Text", "Number", "Multiple Choice", "Yes/No", "Date", "Time", "Signature", "Photo", "Barcode", "GPS", "Dropdown", "Multi-Select", "Section Header", "Paragraph"];
@@ -44,8 +45,12 @@ export default function FormsTab({ data, canEdit, onSave }) {
     await onSave("forms", { items }, "bulk");
   };
 
+  const debouncedSave = useDebouncedCallback(onSave, 800);
   const updateForm = async (form, field, value) => {
     await onSave("forms", { ...form, [field]: value });
+  };
+  const debouncedUpdateForm = async (form, field, value) => {
+    await debouncedSave("forms", { ...form, [field]: value });
   };
 
   const deleteForm = async (form) => {
@@ -69,7 +74,11 @@ export default function FormsTab({ data, canEdit, onSave }) {
     const updateField = async (idx, key, val) => {
       const updated = [...fields];
       updated[idx] = { ...updated[idx], [key]: val };
-      await updateForm(form, "form_fields", JSON.stringify(updated));
+      if (key === "field_type") {
+        await updateForm(form, "form_fields", JSON.stringify(updated));
+      } else {
+        await debouncedUpdateForm(form, "form_fields", JSON.stringify(updated));
+      }
     };
 
     const removeField = async (idx) => {
@@ -191,7 +200,7 @@ export default function FormsTab({ data, canEdit, onSave }) {
                   {expanded === form.id ? <ChevronDown className="w-4 h-4 text-blue-400 flex-shrink-0"/> : <ChevronRight className="w-4 h-4 text-[var(--text-muted)] flex-shrink-0"/>}
                   <span className="text-[var(--text-muted)] text-xs font-mono w-8">{form.form_number || i + 1}</span>
                   {canEdit ? (
-                    <input className="flex-1 bg-transparent text-[var(--text)] text-sm font-medium focus:outline-none" value={form.form_name || ""} onClick={e => e.stopPropagation()} onChange={e => updateForm(form, "form_name", e.target.value)} placeholder="Form name..."/>
+                    <input className="flex-1 bg-transparent text-[var(--text)] text-sm font-medium focus:outline-none" value={form.form_name || ""} onClick={e => e.stopPropagation()} onChange={e => debouncedUpdateForm(form, "form_name", e.target.value)} placeholder="Form name..."/>
                   ) : (
                     <span className="text-[var(--text)] text-sm font-medium">{form.form_name || "Untitled"}</span>
                   )}
@@ -216,7 +225,7 @@ export default function FormsTab({ data, canEdit, onSave }) {
                     <div>
                       <label className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">Purpose / Current Use</label>
                       <textarea className="w-full mt-1 px-2 py-1.5 bg-[var(--bg)] border border-[var(--border)] rounded text-[var(--text)] text-xs focus:outline-none focus:border-blue-500 resize-y disabled:opacity-50"
-                        rows={2} value={form.purpose || ""} onChange={e => updateForm(form, "purpose", e.target.value)} disabled={!canEdit}/>
+                        rows={2} value={form.purpose || ""} onChange={e => debouncedUpdateForm(form, "purpose", e.target.value)} disabled={!canEdit}/>
                     </div>
                     <div>
                       <label className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">Used in Workflow?</label>
@@ -273,7 +282,7 @@ export default function FormsTab({ data, canEdit, onSave }) {
                     <div className="mt-3">
                       <label className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">Describe Stored Procedures</label>
                       <textarea className="w-full mt-1 px-2 py-1.5 bg-[var(--bg)] border border-[var(--border)] rounded text-[var(--text)] text-xs focus:outline-none focus:border-blue-500 resize-y disabled:opacity-50"
-                        rows={2} value={form.stored_procedure_desc || ""} onChange={e => updateForm(form, "stored_procedure_desc", e.target.value)} disabled={!canEdit}/>
+                        rows={2} value={form.stored_procedure_desc || ""} onChange={e => debouncedUpdateForm(form, "stored_procedure_desc", e.target.value)} disabled={!canEdit}/>
                     </div>
                   )}
 

@@ -1,57 +1,54 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { CrossTabBanner, LinkedField } from "./CrossTabBanner";
-import { Pencil, Save, X } from "lucide-react";
+import { useDebounce } from "@/hooks/useDebounce";
 
 export default function WorkflowTab({ data, canEdit, onSave }) {
   const ov = data.overview || {};
   const wt = data.workflow_technical || {};
-  const [editing, setEditing] = useState(false);
-  const [techFields, setTechFields] = useState({});
 
-  const startEditing = () => {
-    setTechFields({
-      pse_hostname_prod: wt.pse_hostname_prod || "",
-      pse_hostname_dev: wt.pse_hostname_dev || "",
-      pse_db_name_prod: wt.pse_db_name_prod || "",
-      pse_db_name_dev: wt.pse_db_name_dev || "",
-      pse_access_level_prod: wt.pse_access_level_prod || "",
-      pse_access_level_dev: wt.pse_access_level_dev || "",
-      pse_totalmail_tz: wt.pse_totalmail_tz || ov.fleet_timezone || "",
-      pse_tm_ip: wt.pse_tm_ip || "",
-      pse_tm_username: wt.pse_tm_username || "",
-      pse_tm_password: wt.pse_tm_password || "",
-      pse_tms_name: wt.pse_tms_name || ov.current_tms || "",
-      tms_access_level: wt.tms_access_level || "",
-      tms_ip_address: wt.tms_ip_address || "",
-      tms_username: wt.tms_username || "",
-      tms_password: wt.tms_password || "",
-      tms_telematics_provided: wt.tms_telematics_provided || ov.current_tsp || "",
-      tms_portal_url: wt.tms_portal_url || "",
-      tms_portal_username: wt.tms_portal_username || "",
-      tms_portal_password: wt.tms_portal_password || "",
-      psplus_cid_prod: wt.psplus_cid_prod || "",
-      psplus_cid_test: wt.psplus_cid_test || "",
-      psplus_cid_dev: wt.psplus_cid_dev || "",
-      psplus_ip_whitelist: wt.psplus_ip_whitelist || "",
-      psplus_integration_username: wt.psplus_integration_username || "",
-      psplus_integration_pw: wt.psplus_integration_pw || "",
-      psplus_enterprise_id: wt.psplus_enterprise_id || "",
-    });
-    setEditing(true);
-  };
+  const initTech = (w, o) => ({
+    pse_hostname_prod: w.pse_hostname_prod || "",
+    pse_hostname_dev: w.pse_hostname_dev || "",
+    pse_db_name_prod: w.pse_db_name_prod || "",
+    pse_db_name_dev: w.pse_db_name_dev || "",
+    pse_access_level_prod: w.pse_access_level_prod || "",
+    pse_access_level_dev: w.pse_access_level_dev || "",
+    pse_totalmail_tz: w.pse_totalmail_tz || o.fleet_timezone || "",
+    pse_tm_ip: w.pse_tm_ip || "",
+    pse_tm_username: w.pse_tm_username || "",
+    pse_tm_password: w.pse_tm_password || "",
+    pse_tms_name: w.pse_tms_name || o.current_tms || "",
+    tms_access_level: w.tms_access_level || "",
+    tms_ip_address: w.tms_ip_address || "",
+    tms_username: w.tms_username || "",
+    tms_password: w.tms_password || "",
+    tms_telematics_provided: w.tms_telematics_provided || o.current_tsp || "",
+    tms_portal_url: w.tms_portal_url || "",
+    tms_portal_username: w.tms_portal_username || "",
+    tms_portal_password: w.tms_portal_password || "",
+    psplus_cid_prod: w.psplus_cid_prod || "",
+    psplus_cid_test: w.psplus_cid_test || "",
+    psplus_cid_dev: w.psplus_cid_dev || "",
+    psplus_ip_whitelist: w.psplus_ip_whitelist || "",
+    psplus_integration_username: w.psplus_integration_username || "",
+    psplus_integration_pw: w.psplus_integration_pw || "",
+    psplus_enterprise_id: w.psplus_enterprise_id || "",
+  });
 
-  const saveTech = () => {
-    onSave("workflow_technical", techFields);
-    setEditing(false);
-  };
+  const [techFields, setTechFields] = useState(() => initTech(wt, ov));
+  useEffect(() => { setTechFields(initTech(wt, ov)); }, [data.workflow_technical]);
+
+  const debouncedTech = useDebounce(techFields, 800);
+  const mountedRef = useRef(false);
+  useEffect(() => { if (!mountedRef.current) { mountedRef.current = true; return; } if (canEdit) onSave("workflow_technical", debouncedTech); }, [debouncedTech]);
 
   const updateField = (key, val) => setTechFields((prev) => ({ ...prev, [key]: val }));
 
   const TechInput = ({ label, field, type = "text" }) => (
     <div className="flex items-center justify-between py-1.5 border-b border-[var(--border)]/20">
       <span className="text-[var(--text-muted)] text-xs">{label}</span>
-      {editing ? (
+      {canEdit ? (
         <input
           type={type}
           value={techFields[field] || ""}
@@ -169,21 +166,6 @@ export default function WorkflowTab({ data, canEdit, onSave }) {
       <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xs font-semibold text-rose-400 uppercase tracking-wider">PS Enterprise Workflow Requirements</h3>
-          {canEdit && !editing && (
-            <button onClick={startEditing} className="flex items-center gap-1.5 px-3 py-1 text-xs bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-600/30 transition-colors">
-              <Pencil size={12}/> Edit Technical
-            </button>
-          )}
-          {editing && (
-            <div className="flex gap-2">
-              <button onClick={saveTech} className="flex items-center gap-1.5 px-3 py-1 text-xs bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-600/30 transition-colors">
-                <Save size={12}/> Save
-              </button>
-              <button onClick={() => setEditing(false)} className="flex items-center gap-1.5 px-3 py-1 text-xs bg-[var(--bg-card)] text-[var(--text-secondary)] border border-[var(--border)] rounded-lg hover:bg-[#1e2840] transition-colors">
-                <X size={12}/> Cancel
-              </button>
-            </div>
-          )}
         </div>
 
         <div className="grid grid-cols-2 gap-x-8 text-xs mb-6">

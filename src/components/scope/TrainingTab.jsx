@@ -1,6 +1,7 @@
 "use client";
 import { CrossTabBanner } from "./CrossTabBanner";
 import { Plus, Trash2, GraduationCap } from "lucide-react";
+import { useDebouncedCallback } from "@/hooks/useDebounce";
 
 const DEFAULT_TRAINING_QS = [
   {cat:"Driver Training", q:"What is the size and bandwidth of your {fleet} Training Team?"},
@@ -32,8 +33,9 @@ export default function TrainingTab({ data, canEdit, onSave }) {
     await onSave("training", { questions: bulk }, "bulk");
   };
 
+  const debouncedSave = useDebouncedCallback(onSave, 800);
   const updateQuestion = async (q, field, value) => {
-    await onSave("training", { ...q, [field]: value });
+    await debouncedSave("training", { ...q, [field]: value });
   };
 
   const deleteQuestion = async (q) => {

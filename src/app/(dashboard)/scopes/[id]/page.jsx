@@ -1,7 +1,8 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Save, Users, Copy, X, Plus, Trash2, Building2, Phone, ShoppingBag, Puzzle, AlertTriangle, MessageSquare, GraduationCap, ClipboardList, Workflow, Calendar, BarChart3, Check, Link2, Home, Database, Download, ChevronDown } from "lucide-react";
+import { ArrowLeft, Users, Copy, X, Plus, Trash2, Building2, Phone, ShoppingBag, Puzzle, AlertTriangle, MessageSquare, GraduationCap, ClipboardList, Workflow, Calendar, BarChart3, Check, Link2, Home, Database, Download, ChevronDown } from "lucide-react";
+import { useDebounce, useDebouncedCallback } from "@/hooks/useDebounce";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { FleetSummary, CrossTabBanner } from "@/components/scope/CrossTabBanner";
 import WorkflowTabComp from "@/components/scope/WorkflowTab";
@@ -21,8 +22,23 @@ function formatPhone(value) {
   return `(${digits.slice(0,3)})-${digits.slice(3,6)}-${digits.slice(6)}`;
 }
 
+function isValidEmail(v) {
+  if (!v) return true;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+}
+
 function ContactInlineInput({val,onChange,dis,bold,sz}) {
   return <input className={`bg-transparent border-none ${bold?"text-[var(--text)]":"text-[var(--text-secondary)]"} text-sm ${sz?"":"w-full"} focus:outline-none`} value={val||""} onChange={e=>onChange(e.target.value)} disabled={dis} placeholder="—" {...(sz?{size:sz}:{})}/>;
+}
+
+function ContactEmailInput({val,onChange,dis}) {
+  const invalid = val && !isValidEmail(val);
+  return (
+    <div className="relative">
+      <input className={`bg-transparent text-[var(--text-secondary)] text-sm focus:outline-none ${invalid ? "border-b border-red-500 text-red-400" : "border-none"}`} value={val||""} onChange={e=>onChange(e.target.value)} disabled={dis} placeholder="email@example.com" size={20}/>
+      {invalid && <span className="absolute -bottom-4 left-0 text-[10px] text-red-400">Invalid email</span>}
+    </div>
+  );
 }
 
 function ContactPhoneInput({val,onChange,dis}) {
@@ -69,6 +85,9 @@ function OverviewTab({ data, canEdit, onSave, refData }) {
   const [ov, setOv] = useState(initOv(data.overview||{}));
   const set = (k,v) => setOv(p=>({...p,[k]:v}));
   useEffect(()=>{setOv(initOv(data.overview||{}))},[data.overview]);
+  const debouncedOv = useDebounce(ov, 800);
+  const mountedRef = useRef(false);
+  useEffect(()=>{if(!mountedRef.current){mountedRef.current=true;return;}if(canEdit) onSave("overview",debouncedOv);},[debouncedOv]);
   const ref = (cat, fallback=[]) => refData[cat]?.length ? refData[cat] : fallback;
   return (
     <div className="space-y-8">
@@ -181,7 +200,6 @@ function OverviewTab({ data, canEdit, onSave, refData }) {
           <Field label="Pick-up/drop-off process" value={ov.pickup_dropoff_process} onChange={v=>set("pickup_dropoff_process",v)} disabled={!canEdit} wide/>
         </div>
       </section>
-      {canEdit && <button onClick={()=>onSave("overview",ov)} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-[var(--text)] font-medium rounded-lg transition flex items-center gap-2"><Save className="w-4 h-4"/> Save Overview</button>}
     </div>
   );
 }
@@ -189,6 +207,9 @@ function OverviewTab({ data, canEdit, onSave, refData }) {
 function ContactsTab({ data, canEdit, onSave }) {
   const [contacts, setContacts] = useState(data.contacts || []);
   useEffect(() => { setContacts(data.contacts || []); }, [data.contacts]);
+  const debouncedContacts = useDebounce(contacts, 800);
+  const contactsMountedRef = useRef(false);
+  useEffect(()=>{if(!contactsMountedRef.current){contactsMountedRef.current=true;return;}if(canEdit) onSave("contacts",debouncedContacts,"bulk");},[debouncedContacts]);
 
   const ps = contacts.filter(c=>c.contact_type==="ps_team");
   const fleet = contacts.filter(c=>c.contact_type==="fleet");
@@ -216,7 +237,7 @@ function ContactsTab({ data, canEdit, onSave }) {
           <tr key={c.id} className="border-t border-[var(--border)]/50 hover:bg-[var(--bg-card)]">
             <td className="px-4 py-2 text-blue-400 font-medium text-xs w-48">{c.role_title}:</td>
             <td className="px-4 py-2"><ContactInlineInput val={c.name} onChange={v=>upd(c.id,"name",v)} dis={!canEdit} bold sz={20}/></td>
-            <td className="px-4 py-2"><ContactInlineInput val={c.email} onChange={v=>upd(c.id,"email",v)} dis={!canEdit} sz={20}/></td>
+            <td className="px-4 py-2"><ContactEmailInput val={c.email} onChange={v=>upd(c.id,"email",v)} dis={!canEdit}/></td>
             <td className="px-4 py-2"><ContactPhoneInput val={c.phone} onChange={v=>upd(c.id,"phone",v)} dis={!canEdit}/></td>
           </tr>))}</tbody></table></div>
       </div>
@@ -233,19 +254,19 @@ function ContactsTab({ data, canEdit, onSave }) {
             <tr key={c.id} className="border-t border-[var(--border)]/50 hover:bg-[var(--bg-card)]">
               <td className="px-4 py-2"><ContactInlineInput val={c.role_title} onChange={v=>upd(c.id,"role_title",v)} dis={!canEdit} bold/></td>
               <td className="px-4 py-2"><ContactInlineInput val={c.name} onChange={v=>upd(c.id,"name",v)} dis={!canEdit} bold sz={20}/></td>
-              <td className="px-4 py-2"><ContactInlineInput val={c.email} onChange={v=>upd(c.id,"email",v)} dis={!canEdit} sz={20}/></td>
+              <td className="px-4 py-2"><ContactEmailInput val={c.email} onChange={v=>upd(c.id,"email",v)} dis={!canEdit}/></td>
               <td className="px-4 py-2"><ContactPhoneInput val={c.phone} onChange={v=>upd(c.id,"phone",v)} dis={!canEdit}/></td>
               {canEdit&&<td className="px-2"><button onClick={()=>onSave("contacts",{id:c.id},"delete")} className="p-1 hover:bg-red-500/10 rounded text-red-400"><Trash2 className="w-3.5 h-3.5"/></button></td>}
             </tr>))}
         </tbody></table></div>
       </div>
-      {canEdit && <button onClick={()=>onSave("contacts",contacts,"bulk")} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-[var(--text)] font-medium rounded-lg transition flex items-center gap-2"><Save className="w-4 h-4"/> Save Contacts</button>}
     </div>
   );
 }
 
 function SolutionTab({ data, canEdit, onSave }) {
   const toggle=(f,k)=>onSave("features",{...f,[k]:f[k]?0:1});
+  const debouncedSave = useDebouncedCallback(onSave, 800);
   const Chk=({val,c="blue"})=>(<div className={`w-5 h-5 rounded border mx-auto flex items-center justify-center ${val?`bg-${c}-600 border-${c}-500`:"bg-[var(--bg)] border-[var(--border)]"}`}>{val?<Check className="w-3 h-3 text-[var(--text)]"/>:null}</div>);
   return (
     <div>
@@ -256,17 +277,18 @@ function SolutionTab({ data, canEdit, onSave }) {
         <tr key={f.id} className="border-t border-[var(--border)]/50 hover:bg-[var(--bg-card)]">
           <td className="px-4 py-2 font-medium text-[var(--text)]">{f.feature_name}</td>
           <td className="px-4 py-2 text-center cursor-pointer" onClick={()=>canEdit&&toggle(f,"needed")}><Chk val={f.needed}/></td>
-          <td className="px-4 py-2 text-center"><input type="number" className="w-14 bg-transparent border-none text-center text-[var(--text-secondary)] text-sm focus:outline-none" value={f.num_licenses??""} onChange={e=>onSave("features",{...f,num_licenses:e.target.value?parseInt(e.target.value):null})} disabled={!canEdit}/></td>
+          <td className="px-4 py-2 text-center"><input type="number" className="w-14 bg-transparent border-none text-center text-[var(--text-secondary)] text-sm focus:outline-none" value={f.num_licenses??""} onChange={e=>debouncedSave("features",{...f,num_licenses:e.target.value?parseInt(e.target.value):null})} disabled={!canEdit}/></td>
           <td className="px-4 py-2 text-center cursor-pointer" onClick={()=>canEdit&&toggle(f,"required_for_quote")}><Chk val={f.required_for_quote} c="emerald"/></td>
           <td className="px-4 py-2 text-center cursor-pointer" onClick={()=>canEdit&&toggle(f,"required_for_pilot")}><Chk val={f.required_for_pilot} c="emerald"/></td>
           <td className="px-4 py-2 text-center cursor-pointer" onClick={()=>canEdit&&toggle(f,"required_for_production")}><Chk val={f.required_for_production} c="emerald"/></td>
-          <td className="px-4 py-2"><input className="bg-transparent border-none text-[var(--text-secondary)] text-sm w-full focus:outline-none" value={f.notes||""} onChange={e=>onSave("features",{...f,notes:e.target.value})} disabled={!canEdit} placeholder="—"/></td>
+          <td className="px-4 py-2"><input className="bg-transparent border-none text-[var(--text-secondary)] text-sm w-full focus:outline-none" value={f.notes||""} onChange={e=>debouncedSave("features",{...f,notes:e.target.value})} disabled={!canEdit} placeholder="—"/></td>
         </tr>))}</tbody></table></div>
     </div>
   );
 }
 
 function GapsTab({ data, canEdit, onSave }) {
+  const debouncedSave = useDebouncedCallback(onSave, 800);
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
@@ -282,12 +304,12 @@ function GapsTab({ data, canEdit, onSave }) {
               {canEdit&&<button onClick={()=>onSave("gaps",{id:g.id},"delete")} className="text-red-400"><Trash2 className="w-4 h-4"/></button>}
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Gap Identified" value={g.gap_identified} onChange={v=>onSave("gaps",{...g,gap_identified:v})} disabled={!canEdit} wide/>
-              <Field label="Use Case" value={g.use_case} onChange={v=>onSave("gaps",{...g,use_case:v})} disabled={!canEdit} type="textarea" wide/>
+              <Field label="Gap Identified" value={g.gap_identified} onChange={v=>debouncedSave("gaps",{...g,gap_identified:v})} disabled={!canEdit} wide/>
+              <Field label="Use Case" value={g.use_case} onChange={v=>debouncedSave("gaps",{...g,use_case:v})} disabled={!canEdit} type="textarea" wide/>
               <Field label="BD Team Engaged" value={g.bd_team_engaged} onChange={v=>onSave("gaps",{...g,bd_team_engaged:v})} disabled={!canEdit} type="checkbox"/>
               <Field label="Product Team Engaged" value={g.product_team_engaged} onChange={v=>onSave("gaps",{...g,product_team_engaged:v})} disabled={!canEdit} type="checkbox"/>
               <Field label="Customer Blocker" value={g.customer_blocker} onChange={v=>onSave("gaps",{...g,customer_blocker:v})} disabled={!canEdit} type="checkbox"/>
-              <Field label="PSOP Ticket" value={g.psop_ticket} onChange={v=>onSave("gaps",{...g,psop_ticket:v})} disabled={!canEdit}/>
+              <Field label="PSOP Ticket" value={g.psop_ticket} onChange={v=>debouncedSave("gaps",{...g,psop_ticket:v})} disabled={!canEdit}/>
             </div>
           </div>))}
       </div>
@@ -296,6 +318,7 @@ function GapsTab({ data, canEdit, onSave }) {
 }
 
 function MarketplaceTab({ data, canEdit, onSave }) {
+  const debouncedSave = useDebouncedCallback(onSave, 800);
   const [showCatalog, setShowCatalog] = useState(false);
   const [catalog, setCatalog] = useState([]);
   const [catSearch, setCatSearch] = useState("");
@@ -351,9 +374,9 @@ function MarketplaceTab({ data, canEdit, onSave }) {
           {data.upas.map(u=>(
             <div key={u.id} className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-4">
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Name" value={u.name} onChange={v=>onSave("upas",{...u,name:v})} disabled={!canEdit}/>
-                <Field label="Website URL" value={u.website_url} onChange={v=>onSave("upas",{...u,website_url:v})} disabled={!canEdit}/>
-                <Field label="Use Case" value={u.use_case} onChange={v=>onSave("upas",{...u,use_case:v})} disabled={!canEdit} wide/>
+                <Field label="Name" value={u.name} onChange={v=>debouncedSave("upas",{...u,name:v})} disabled={!canEdit}/>
+                <Field label="Website URL" value={u.website_url} onChange={v=>debouncedSave("upas",{...u,website_url:v})} disabled={!canEdit}/>
+                <Field label="Use Case" value={u.use_case} onChange={v=>debouncedSave("upas",{...u,use_case:v})} disabled={!canEdit} wide/>
                 <Field label="Deeplink" value={u.has_deeplink} onChange={v=>onSave("upas",{...u,has_deeplink:v})} disabled={!canEdit} type="checkbox"/>
                 {canEdit&&<div className="flex justify-end col-span-2"><button onClick={()=>onSave("upas",{id:u.id},"delete")} className="text-xs text-red-400 flex items-center gap-1"><Trash2 className="w-3 h-3"/> Remove</button></div>}
               </div>
@@ -367,6 +390,7 @@ function MarketplaceTab({ data, canEdit, onSave }) {
 
 
 function InstallTab({ data, canEdit, onSave }) {
+  const debouncedSave = useDebouncedCallback(onSave, 800);
   const M=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const byY={};data.forecasts.forEach(f=>{if(!byY[f.year])byY[f.year]=[];byY[f.year].push(f);});
   return (
@@ -381,11 +405,11 @@ function InstallTab({ data, canEdit, onSave }) {
             <th className="px-3 py-3 text-center text-xs text-[var(--text-secondary)] font-semibold bg-blue-500/10">Total</th>
           </tr></thead><tbody>
             <tr className="border-t border-[var(--border)]/50"><td className="px-3 py-2 text-amber-400 font-medium text-xs">Forecast</td>
-              {s.map(f=><td key={f.month} className="px-1 py-2 text-center"><input type="number" className="w-12 bg-transparent text-center text-[var(--text)] text-sm focus:outline-none border-none" value={f.forecasted||0} onChange={e=>onSave("forecasts",{...f,forecasted:parseInt(e.target.value)||0})} disabled={!canEdit}/></td>)}
+              {s.map(f=><td key={f.month} className="px-1 py-2 text-center"><input type="number" className="w-12 bg-transparent text-center text-[var(--text)] text-sm focus:outline-none border-none" value={f.forecasted||0} onChange={e=>debouncedSave("forecasts",{...f,forecasted:parseInt(e.target.value)||0})} disabled={!canEdit}/></td>)}
               <td className="px-3 py-2 text-center font-bold text-amber-400 bg-blue-500/5">{s.reduce((a,f)=>a+(f.forecasted||0),0)}</td>
             </tr>
             <tr className="border-t border-[var(--border)]/50"><td className="px-3 py-2 text-emerald-400 font-medium text-xs">Actual</td>
-              {s.map(f=><td key={f.month} className="px-1 py-2 text-center"><input type="number" className="w-12 bg-transparent text-center text-[var(--text)] text-sm focus:outline-none border-none" value={f.actual||0} onChange={e=>onSave("forecasts",{...f,actual:parseInt(e.target.value)||0})} disabled={!canEdit}/></td>)}
+              {s.map(f=><td key={f.month} className="px-1 py-2 text-center"><input type="number" className="w-12 bg-transparent text-center text-[var(--text)] text-sm focus:outline-none border-none" value={f.actual||0} onChange={e=>debouncedSave("forecasts",{...f,actual:parseInt(e.target.value)||0})} disabled={!canEdit}/></td>)}
               <td className="px-3 py-2 text-center font-bold text-emerald-400 bg-blue-500/5">{s.reduce((a,f)=>a+(f.actual||0),0)}</td>
             </tr>
           </tbody></table></div></div>);
@@ -450,7 +474,8 @@ function SharingTab({ data, scopeId }) {
   const shareUrl=data.share_token?`${typeof window!=="undefined"?window.location.origin:""}/share/${data.share_token}`:null;
   const enableShare=async()=>{await fetch(`/api/scopes/${scopeId}/share`,{method:"POST"});window.location.reload();};
   const disableShare=async()=>{await fetch(`/api/scopes/${scopeId}/share`,{method:"DELETE"});window.location.reload();};
-  const invite=async()=>{if(!invEmail)return;const r=await fetch(`/api/scopes/${scopeId}/collaborators`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:invEmail,role:invRole})});if(r.ok){setInvEmail("");window.location.reload();}else{const d=await r.json();alert(d.error);}};
+  const invEmailValid = isValidEmail(invEmail) && invEmail.length > 0;
+  const invite=async()=>{if(!invEmailValid)return;const r=await fetch(`/api/scopes/${scopeId}/collaborators`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:invEmail,role:invRole})});if(r.ok){setInvEmail("");window.location.reload();}else{const d=await r.json();alert(d.error);}};
   const remove=async(uid)=>{await fetch(`/api/scopes/${scopeId}/collaborators`,{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:uid})});window.location.reload();};
   const copyLink=()=>{if(shareUrl){navigator.clipboard.writeText(shareUrl);setCopied(true);setTimeout(()=>setCopied(false),2000);}};
   const rc={owner:"text-blue-400 bg-blue-500/10 border-blue-500/20",editor:"text-emerald-400 bg-emerald-500/10 border-emerald-500/20",viewer:"text-amber-400 bg-amber-500/10 border-amber-500/20"};
@@ -478,9 +503,12 @@ function SharingTab({ data, scopeId }) {
       </div>
       <div><h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">Team Members</h3>
         {isOwner&&<div className="flex gap-3 mb-4">
-          <input value={invEmail} onChange={e=>setInvEmail(e.target.value)} placeholder="Email address" className="flex-1 px-4 py-2.5 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-[var(--text)] text-sm placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500"/>
+          <div className="flex-1 relative">
+            <input value={invEmail} onChange={e=>setInvEmail(e.target.value)} placeholder="Email address" className={`w-full px-4 py-2.5 bg-[var(--bg-secondary)] border rounded-lg text-[var(--text)] text-sm placeholder-[var(--text-muted)] focus:outline-none ${invEmail && !isValidEmail(invEmail) ? "border-red-500 focus:border-red-500" : "border-[var(--border)] focus:border-blue-500"}`}/>
+            {invEmail && !isValidEmail(invEmail) && <span className="absolute -bottom-4 left-1 text-[10px] text-red-400">Invalid email address</span>}
+          </div>
           <select value={invRole} onChange={e=>setInvRole(e.target.value)} className="px-3 py-2.5 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-[var(--text)] text-sm"><option value="viewer">Viewer</option><option value="editor">Editor</option></select>
-          <button onClick={invite} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-[var(--text)] rounded-lg text-sm font-medium">Invite</button>
+          <button onClick={invite} disabled={!invEmailValid} className={`px-5 py-2.5 rounded-lg text-sm font-medium ${invEmailValid ? "bg-blue-600 hover:bg-blue-500 text-[var(--text)]" : "bg-blue-600/30 text-[var(--text-muted)] cursor-not-allowed"}`}>Invite</button>
         </div>}
         <div className="space-y-2">{data.collaborators.map(c=>(
           <div key={c.id} className="flex items-center justify-between bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg px-4 py-3">

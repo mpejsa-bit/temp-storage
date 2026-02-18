@@ -1,6 +1,7 @@
 "use client";
 import { CrossTabBanner } from "./CrossTabBanner";
 import { Plus, Trash2, MessageSquare } from "lucide-react";
+import { useDebouncedCallback } from "@/hooks/useDebounce";
 
 const DEFAULT_QUESTIONS = [
   {cat:"Technology & Integrations",q:"Of the legacy systems {fleet} is using today, what is the level of satisfaction with each?"},
@@ -67,8 +68,9 @@ export default function WorkshopTab({ data, canEdit, onSave }) {
     await onSave("workshop", { questions: bulkQuestions }, "bulk");
   };
 
+  const debouncedSave = useDebouncedCallback(onSave, 800);
   const updateQuestion = async (q, field, value) => {
-    await onSave("workshop", { ...q, [field]: value });
+    await debouncedSave("workshop", { ...q, [field]: value });
   };
 
   const deleteQuestion = async (q) => {
