@@ -367,156 +367,59 @@ export async function cloneScope(scopeId: string, newOwnerId: string): Promise<s
     `${(scope as Record<string, unknown>).fleet_name} (Copy)`
   );
 
-  // Copy overview
-  const overview = db.exec("SELECT * FROM fleet_overview WHERE scope_id = ?", [scopeId]);
-  if (overview.length && overview[0].values.length) {
-    const ov = rowToObj(overview[0].columns, overview[0].values[0]);
-    const cols = overview[0].columns.filter((c) => c !== "id" && c !== "scope_id");
+  // Helper: copy rows from a table, generating new IDs and replacing scope_id
+  function copyRows(table: string, query: string, params: unknown[]) {
+    const result = db.exec(query, params);
+    if (!result.length) return;
+    const cols = result[0].columns.filter((c) => c !== "id" && c !== "scope_id");
+    for (const row of result[0].values) {
+      const obj = rowToObj(result[0].columns, row);
+      const placeholders = cols.map(() => "?").join(", ");
+      const vals = cols.map((c) => obj[c]);
+      db.run(
+        `INSERT INTO ${table} (id, scope_id, ${cols.join(", ")}) VALUES (?, ?, ${placeholders})`,
+        [generateId(), newId, ...vals]
+      );
+    }
+  }
+
+  // Helper: copy single-row table by updating existing row
+  function copySingleRow(table: string, scopeKey = "scope_id") {
+    const result = db.exec(`SELECT * FROM ${table} WHERE ${scopeKey} = ?`, [scopeId]);
+    if (!result.length || !result[0].values.length) return;
+    const obj = rowToObj(result[0].columns, result[0].values[0]);
+    const cols = result[0].columns.filter((c) => c !== "id" && c !== scopeKey);
+    if (!cols.length) return;
     const setStr = cols.map((c) => `${c} = ?`).join(", ");
-    const vals = cols.map((c) => ov[c]);
+    const vals = cols.map((c) => obj[c]);
     vals.push(newId);
-    db.run(`UPDATE fleet_overview SET ${setStr} WHERE scope_id = ?`, vals);
+    db.run(`UPDATE ${table} SET ${setStr} WHERE ${scopeKey} = ?`, vals);
   }
 
-  // Copy fleet contacts (ps_team defaults already seeded by createScope)
-  const contacts = db.exec("SELECT * FROM contacts WHERE scope_id = ? AND contact_type = 'fleet'", [scopeId]);
-  if (contacts.length) {
-    for (const row of contacts[0].values) {
-      const obj = rowToObj(contacts[0].columns, row);
-      db.run(
-        `INSERT INTO contacts (id, scope_id, contact_type, role_title, name, title, email, phone, sort_order)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [generateId(), newId, obj.contact_type, obj.role_title, obj.name, obj.title, obj.email, obj.phone, obj.sort_order]
-      );
-    }
-  }
+  copySingleRow("fleet_overview");
+  copyRows("contacts", "SELECT * FROM contacts WHERE scope_id = ? AND contact_type = 'fleet'", [scopeId]);
+  copyRows("user_provided_apps", "SELECT * FROM user_provided_apps WHERE scope_id = ?", [scopeId]);
+  copyRows("marketplace_apps", "SELECT * FROM marketplace_apps WHERE scope_id = ?", [scopeId]);
 
-  // Copy UPAs
-  const upas = db.exec("SELECT * FROM user_provided_apps WHERE scope_id = ?", [scopeId]);
-  if (upas.length) {
-    for (const row of upas[0].values) {
-      const obj = rowToObj(upas[0].columns, row);
-      db.run(
-        `INSERT INTO user_provided_apps (id, scope_id, name, use_case, apk_or_website, website_url, has_deeplink, deeplink_description, comments, sort_order)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [generateId(), newId, obj.name, obj.use_case, obj.apk_or_website, obj.website_url, obj.has_deeplink, obj.deeplink_description, obj.comments, obj.sort_order]
-      );
-    }
-  }
-
-  // Copy marketplace apps
-  const mApps = db.exec("SELECT * FROM marketplace_apps WHERE scope_id = ?", [scopeId]);
-  if (mApps.length) {
-    for (const row of mApps[0].values) {
-      const obj = rowToObj(mApps[0].columns, row);
-      db.run(
-        `INSERT INTO marketplace_apps (id, scope_id, product_name, partner_account, solution_type, partner_category, partner_subcategory, description, value_proposition, stage, selected, notes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [generateId(), newId, obj.product_name, obj.partner_account, obj.solution_type, obj.partner_category, obj.partner_subcategory, obj.description, obj.value_proposition, obj.stage, obj.selected, obj.notes]
-      );
-    }
-  }
-
-  // Copy solution features (delete seeded defaults first, then copy source)
+  // Replace seeded defaults with source data
   db.run("DELETE FROM solution_features WHERE scope_id = ?", [newId]);
-  const features = db.exec("SELECT * FROM solution_features WHERE scope_id = ?", [scopeId]);
-  if (features.length) {
-    for (const row of features[0].values) {
-      const obj = rowToObj(features[0].columns, row);
-      db.run(
-        `INSERT INTO solution_features (id, scope_id, feature_name, needed, num_licenses, required_for_quote, required_for_pilot, required_for_production, notes, sort_order)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [generateId(), newId, obj.feature_name, obj.needed, obj.num_licenses, obj.required_for_quote, obj.required_for_pilot, obj.required_for_production, obj.notes, obj.sort_order]
-      );
-    }
-  }
+  copyRows("solution_features", "SELECT * FROM solution_features WHERE scope_id = ?", [scopeId]);
 
-  // Copy gaps
-  const gaps = db.exec("SELECT * FROM gaps WHERE scope_id = ?", [scopeId]);
-  if (gaps.length) {
-    for (const row of gaps[0].values) {
-      const obj = rowToObj(gaps[0].columns, row);
-      db.run(
-        `INSERT INTO gaps (id, scope_id, gap_number, gap_identified, use_case, bd_team_engaged, product_team_engaged, se_use_case_link, psop_ticket, customer_blocker, sort_order)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [generateId(), newId, obj.gap_number, obj.gap_identified, obj.use_case, obj.bd_team_engaged, obj.product_team_engaged, obj.se_use_case_link, obj.psop_ticket, obj.customer_blocker, obj.sort_order]
-      );
-    }
-  }
+  copyRows("gaps", "SELECT * FROM gaps WHERE scope_id = ?", [scopeId]);
+  copyRows("workshop_questions", "SELECT * FROM workshop_questions WHERE scope_id = ?", [scopeId]);
+  copyRows("training_questions", "SELECT * FROM training_questions WHERE scope_id = ?", [scopeId]);
+  copyRows("scope_forms", "SELECT * FROM scope_forms WHERE scope_id = ?", [scopeId]);
 
-  // Copy workshop questions
-  const workshop = db.exec("SELECT * FROM workshop_questions WHERE scope_id = ?", [scopeId]);
-  if (workshop.length) {
-    for (const row of workshop[0].values) {
-      const obj = rowToObj(workshop[0].columns, row);
-      db.run(
-        `INSERT INTO workshop_questions (id, scope_id, sub_category, question, response, comments, sort_order)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [generateId(), newId, obj.sub_category, obj.question, obj.response, obj.comments, obj.sort_order]
-      );
-    }
-  }
-
-  // Copy training questions
-  const training = db.exec("SELECT * FROM training_questions WHERE scope_id = ?", [scopeId]);
-  if (training.length) {
-    for (const row of training[0].values) {
-      const obj = rowToObj(training[0].columns, row);
-      db.run(
-        `INSERT INTO training_questions (id, scope_id, training_type, training_personnel, sub_category, question, response, comments, sort_order)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [generateId(), newId, obj.training_type, obj.training_personnel, obj.sub_category, obj.question, obj.response, obj.comments, obj.sort_order]
-      );
-    }
-  }
-
-  // Copy forms
-  const forms = db.exec("SELECT * FROM scope_forms WHERE scope_id = ?", [scopeId]);
-  if (forms.length) {
-    for (const row of forms[0].values) {
-      const obj = rowToObj(forms[0].columns, row);
-      db.run(
-        `INSERT INTO scope_forms (id, scope_id, form_number, form_name, purpose, used_in_workflow, driver_or_dispatch, driver_response_expected, form_category, decision_tree_logic, stored_procedures, stored_procedure_desc, form_type, form_fields, sort_order)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [generateId(), newId, obj.form_number, obj.form_name, obj.purpose, obj.used_in_workflow, obj.driver_or_dispatch, obj.driver_response_expected, obj.form_category, obj.decision_tree_logic, obj.stored_procedures, obj.stored_procedure_desc, obj.form_type, obj.form_fields, obj.sort_order]
-      );
-    }
-  }
-
-  // Copy install forecasts (delete seeded defaults first, then copy source)
   db.run("DELETE FROM install_forecasts WHERE scope_id = ?", [newId]);
-  const forecasts = db.exec("SELECT * FROM install_forecasts WHERE scope_id = ?", [scopeId]);
-  if (forecasts.length) {
-    for (const row of forecasts[0].values) {
-      const obj = rowToObj(forecasts[0].columns, row);
-      db.run(
-        `INSERT INTO install_forecasts (id, scope_id, year, month, forecasted, actual)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [generateId(), newId, obj.year, obj.month, obj.forecasted, obj.actual]
-      );
-    }
-  }
+  copyRows("install_forecasts", "SELECT * FROM install_forecasts WHERE scope_id = ?", [scopeId]);
 
-  // Copy workflow integration
-  const wfInt = db.exec("SELECT * FROM workflow_integration WHERE scope_id = ?", [scopeId]);
-  if (wfInt.length && wfInt[0].values.length) {
-    const obj = rowToObj(wfInt[0].columns, wfInt[0].values[0]);
-    db.run("UPDATE workflow_integration SET data_json = ? WHERE scope_id = ?", [obj.data_json, newId]);
-  }
+  copySingleRow("workflow_integration");
 
-  // Copy workflow technical
+  // Copy workflow technical (insert row first if needed)
   const wfTech = db.exec("SELECT * FROM workflow_technical WHERE scope_id = ?", [scopeId]);
   if (wfTech.length && wfTech[0].values.length) {
-    const obj = rowToObj(wfTech[0].columns, wfTech[0].values[0]);
-    const cols = wfTech[0].columns.filter((c) => c !== "id" && c !== "scope_id");
-    if (cols.length) {
-      const id = generateId();
-      db.run("INSERT OR REPLACE INTO workflow_technical (id, scope_id) VALUES (?, ?)", [id, newId]);
-      const setStr = cols.map((c) => `${c} = ?`).join(", ");
-      const vals = cols.map((c) => obj[c]);
-      vals.push(newId);
-      db.run(`UPDATE workflow_technical SET ${setStr} WHERE scope_id = ?`, vals);
-    }
+    db.run("INSERT OR REPLACE INTO workflow_technical (id, scope_id) VALUES (?, ?)", [generateId(), newId]);
+    copySingleRow("workflow_technical");
   }
 
   saveDb();
@@ -638,7 +541,8 @@ export async function getWorkflowTechnical(scopeId: string) {
         try {
           row[field] = decrypt(val);
         } catch {
-          // Value may not be encrypted yet (pre-migration data)
+          // Value may not be encrypted yet (pre-migration data) — hide it
+          row[field] = "";
         }
       }
     }

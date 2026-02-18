@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
 import { getDb, saveDb } from "@/lib/db";
 import { generateId } from "@/lib/utils";
 
 export async function GET(req: Request) {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { searchParams } = new URL(req.url);
   const table = searchParams.get("table");
   const search = searchParams.get("q") || "";
@@ -61,6 +64,9 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const body = await req.json();
   const { table, category, value } = body;
 
@@ -84,6 +90,9 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const body = await req.json();
   const { table, id, value } = body;
 
@@ -99,6 +108,9 @@ export async function PATCH(req: Request) {
 }
 
 export async function PUT(req: Request) {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const body = await req.json();
   const { table, category, orderedIds } = body;
 
@@ -116,6 +128,9 @@ export async function PUT(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const body = await req.json();
   const { table, id } = body;
 

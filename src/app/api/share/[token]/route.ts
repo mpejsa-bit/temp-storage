@@ -4,10 +4,15 @@ import {
   getUPAs, getFeatures, getGaps, getForms, getWorkflow, getForecasts,
   getScopeStats, getWorkshopQuestions, getTrainingQuestions
 } from "@/lib/scopes";
-import { seedDatabase } from "@/lib/seed";
+import { rateLimit } from "@/lib/rate-limit";
 
 export async function GET(req: Request, { params }: { params: { token: string } }) {
-  await seedDatabase();
+  const ip = req.headers.get("x-forwarded-for") || "unknown";
+  const { ok } = rateLimit(`share:${ip}`, { maxRequests: 30, windowMs: 60_000 });
+  if (!ok) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
+
   const scope = await getScopeByToken(params.token);
   if (!scope) return NextResponse.json({ error: "Not found" }, { status: 404 });
 

@@ -2,12 +2,19 @@ import { NextResponse } from "next/server";
 import { getDb, saveDb } from "@/lib/db";
 import { generateId } from "@/lib/utils";
 import { seedDatabase } from "@/lib/seed";
+import { rateLimit } from "@/lib/rate-limit";
 import bcrypt from "bcryptjs";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function POST(req: Request) {
   try {
+    const ip = req.headers.get("x-forwarded-for") || "unknown";
+    const { ok } = rateLimit(`register:${ip}`, { maxRequests: 5, windowMs: 60_000 });
+    if (!ok) {
+      return NextResponse.json({ error: "Too many requests. Try again later." }, { status: 429 });
+    }
+
     const { email, password, name } = await req.json();
     if (!email || !password || !name) {
       return NextResponse.json({ error: "All fields required" }, { status: 400 });

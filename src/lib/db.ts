@@ -1,5 +1,5 @@
 import initSqlJs, { Database } from "sql.js";
-import fs from "fs";
+import fs from "fs/promises";
 import path from "path";
 
 const DB_PATH = process.env.ELECTRON_DATA_DIR
@@ -7,16 +7,18 @@ const DB_PATH = process.env.ELECTRON_DATA_DIR
   : path.join(process.cwd(), "data", "scope.db");
 
 let db: Database | null = null;
+let saving = false;
+let saveQueued = false;
 
 export async function getDb(): Promise<Database> {
   if (db) return db;
 
   const SQL = await initSqlJs();
 
-  if (fs.existsSync(DB_PATH)) {
-    const buffer = fs.readFileSync(DB_PATH);
+  try {
+    const buffer = await fs.readFile(DB_PATH);
     db = new SQL.Database(buffer);
-  } else {
+  } catch {
     db = new SQL.Database();
     initSchema(db);
   }
@@ -26,10 +28,23 @@ export async function getDb(): Promise<Database> {
 
 export function saveDb() {
   if (!db) return;
-  const dir = path.dirname(DB_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  if (saving) {
+    saveQueued = true;
+    return;
+  }
+  saving = true;
   const data = db.export();
-  fs.writeFileSync(DB_PATH, Buffer.from(data));
+  const dir = path.dirname(DB_PATH);
+  fs.mkdir(dir, { recursive: true })
+    .then(() => fs.writeFile(DB_PATH, Buffer.from(data)))
+    .catch((err) => console.error("Failed to save DB:", err))
+    .finally(() => {
+      saving = false;
+      if (saveQueued) {
+        saveQueued = false;
+        saveDb();
+      }
+    });
 }
 
 function initSchema(db: Database) {
