@@ -1,6 +1,118 @@
 import { getDb, saveDb } from "./db";
 import { generateId, generateShareToken, getFleetSizeLabel } from "./utils";
 import { PS_FEATURES } from "./seed";
+import { encrypt, decrypt } from "./crypto";
+
+// ── Column whitelists ──────────────────────────────────────────────────
+const ALLOWED_COLUMNS: Record<string, Set<string>> = {
+  scope_documents: new Set([
+    "fleet_name", "status", "share_token", "share_access",
+    "sf_opportunity_id", "updated_at",
+  ]),
+  fleet_overview: new Set([
+    "hq_location", "company_website", "ps_platform", "fleet_timezone",
+    "current_technology", "fleet_persona", "num_drivers", "num_tractors",
+    "num_trailers", "fleet_size_label", "type_of_company", "type_of_operation",
+    "current_tsp", "current_tms", "current_tms_type", "current_tms_version",
+    "future_tms", "future_tms_type", "future_tms_version",
+    "workflow_current", "workflow_future",
+    "workflow_integrator_current", "workflow_integrator_future",
+    "systems_integrator_current", "systems_integrator_future",
+    "executive_sponsor_name", "executive_sponsor_title", "account_executive",
+    "date_lead_provided", "contract_link", "sf_opportunity_link",
+    "master_notes_link", "customer_dossier_link",
+    "account_temperature", "temperature_comments",
+    "operating_companies", "offices_terminals", "border_crossing",
+    "other_hardware_used", "other_hardware_needed",
+    "tpms", "trailer_tracking", "freight_visibility", "lane_departure",
+    "incab_navigation", "trailer_tracking_tms", "video_safety",
+    "load_optimization", "lms", "trailer_temp", "video_camera", "quotes",
+    "fuel_management", "scanning", "incab_safety", "route_compliance",
+    "fuel_tax", "truck_stop", "incab_coaching", "mdm", "fuel_optimization",
+    "maintenance", "training_tech", "speed_control", "fuel_cards",
+    "weigh_station", "compliance", "speeding_posted", "driver_companion",
+    "scales", "payroll", "incab_wellness",
+    "hardware_json", "vehicles_json", "vehicle_list_link",
+    "has_tankers", "single_compartments", "multiple_compartments",
+    "rented_foreign_trailers", "use_containers", "use_chassis",
+    "parcel_shipments", "multi_stop_orders", "commodities_hauled",
+    "multi_mode_transport", "split_loads", "multi_leg_shipments",
+    "freight_via_rail", "petroleum_liquids", "consolidate_loads",
+    "pickup_dropoff_process",
+  ]),
+  contacts: new Set([
+    "scope_id", "contact_type", "role_title", "name", "title", "email", "phone", "sort_order",
+  ]),
+  marketplace_apps: new Set([
+    "scope_id", "product_name", "partner_account", "solution_type",
+    "partner_category", "partner_subcategory", "description",
+    "value_proposition", "stage", "selected", "notes",
+  ]),
+  user_provided_apps: new Set([
+    "scope_id", "name", "use_case", "apk_or_website", "website_url",
+    "has_deeplink", "deeplink_description", "comments", "sort_order",
+  ]),
+  solution_features: new Set([
+    "scope_id", "feature_name", "needed", "num_licenses",
+    "required_for_quote", "required_for_pilot", "required_for_production",
+    "notes", "sort_order",
+  ]),
+  gaps: new Set([
+    "scope_id", "gap_number", "gap_identified", "use_case",
+    "bd_team_engaged", "product_team_engaged", "se_use_case_link",
+    "psop_ticket", "customer_blocker", "sort_order",
+  ]),
+  workshop_questions: new Set([
+    "scope_id", "sub_category", "question", "response", "comments", "sort_order",
+  ]),
+  training_questions: new Set([
+    "scope_id", "training_type", "training_personnel", "sub_category",
+    "question", "response", "comments", "sort_order",
+  ]),
+  scope_forms: new Set([
+    "scope_id", "form_number", "form_name", "purpose", "used_in_workflow",
+    "driver_or_dispatch", "driver_response_expected", "form_category",
+    "decision_tree_logic", "stored_procedures", "stored_procedure_desc",
+    "form_type", "form_fields", "sort_order",
+  ]),
+  install_forecasts: new Set([
+    "scope_id", "year", "month", "forecasted", "actual",
+  ]),
+  workflow_technical: new Set([
+    "pse_hostname_prod", "pse_hostname_dev", "pse_db_name_prod", "pse_db_name_dev",
+    "pse_access_level_prod", "pse_access_level_dev", "pse_totalmail_tz",
+    "pse_tm_ip", "pse_tm_username", "pse_tm_password",
+    "pse_tms_name", "pse_db_hostname", "pse_db_name", "pse_server_tz",
+    "tms_access_level", "tms_ip_address", "tms_username", "tms_password",
+    "tms_telematics_provided", "tms_portal_url", "tms_portal_username",
+    "tms_portal_password",
+    "psplus_cid_prod", "psplus_cid_test", "psplus_cid_dev",
+    "psplus_ip_whitelist", "psplus_integration_username",
+    "psplus_integration_pw", "psplus_enterprise_id",
+  ]),
+};
+
+const ALLOWED_TABLES = new Set([
+  "contacts", "marketplace_apps", "user_provided_apps", "solution_features",
+  "gaps", "workshop_questions", "training_questions", "scope_forms",
+  "install_forecasts",
+]);
+
+const ENCRYPTED_FIELDS = [
+  "pse_tm_password", "tms_password", "tms_portal_password", "psplus_integration_pw",
+] as const;
+
+const ENCRYPTED_FIELDS_SET = new Set<string>(ENCRYPTED_FIELDS);
+
+function validateColumns(table: string, keys: string[]): void {
+  const allowed = ALLOWED_COLUMNS[table];
+  if (!allowed) throw new Error(`Unknown table: ${table}`);
+  for (const key of keys) {
+    if (!allowed.has(key)) {
+      throw new Error(`Invalid column "${key}" for table "${table}"`);
+    }
+  }
+}
 
 export interface ScopeDocument {
   id: string;
@@ -224,6 +336,9 @@ export async function updateScope(scopeId: string, data: Record<string, unknown>
   const sets: string[] = [];
   const vals: unknown[] = [];
 
+  const keys = Object.keys(data);
+  validateColumns("scope_documents", keys);
+
   for (const [key, val] of Object.entries(data)) {
     sets.push(`${key} = ?`);
     vals.push(val);
@@ -440,6 +555,9 @@ export async function updateOverview(scopeId: string, data: Record<string, unkno
   const vals: unknown[] = [];
   for (const [key, val] of Object.entries(data)) {
     if (key === "id" || key === "scope_id" || key === "fleet_name" || key === "fleet_size_label") continue;
+    if (!ALLOWED_COLUMNS.fleet_overview.has(key)) {
+      throw new Error(`Invalid column "${key}" for table "fleet_overview"`);
+    }
     sets.push(`${key} = ?`);
     vals.push(val);
   }
@@ -512,38 +630,54 @@ export async function getWorkflowTechnical(scopeId: string) {
   const rows = execToObjects(
     db.exec("SELECT * FROM workflow_technical WHERE scope_id = ?", [scopeId])
   );
-  return rows[0] || null;
+  const row = rows[0] || null;
+  if (row) {
+    for (const field of ENCRYPTED_FIELDS) {
+      const val = row[field];
+      if (typeof val === "string" && val.length > 0) {
+        try {
+          row[field] = decrypt(val);
+        } catch {
+          // Value may not be encrypted yet (pre-migration data)
+        }
+      }
+    }
+  }
+  return row;
 }
 
 export async function upsertWorkflowTechnical(scopeId: string, data: Record<string, unknown>) {
   const db = await getDb();
+
+  // Validate and encrypt
+  const processedData: Record<string, unknown> = {};
+  for (const [key, val] of Object.entries(data)) {
+    if (key === "id" || key === "scope_id") continue;
+    if (!ALLOWED_COLUMNS.workflow_technical.has(key)) {
+      throw new Error(`Invalid column "${key}" for table "workflow_technical"`);
+    }
+    if (ENCRYPTED_FIELDS_SET.has(key) && typeof val === "string" && val.length > 0) {
+      processedData[key] = encrypt(val);
+    } else {
+      processedData[key] = val;
+    }
+  }
+
   const existing = db.exec("SELECT id FROM workflow_technical WHERE scope_id = ?", [scopeId]);
-  if (existing.length && existing[0].values.length) {
-    const sets: string[] = [];
-    const vals: unknown[] = [];
-    for (const [key, val] of Object.entries(data)) {
-      if (key === "id" || key === "scope_id") continue;
-      sets.push(`${key} = ?`);
-      vals.push(val);
-    }
-    if (sets.length) {
-      vals.push(scopeId);
-      db.run(`UPDATE workflow_technical SET ${sets.join(", ")} WHERE scope_id = ?`, vals);
-    }
-  } else {
+  if (!(existing.length && existing[0].values.length)) {
     const id = generateId();
     db.run("INSERT INTO workflow_technical (id, scope_id) VALUES (?, ?)", [id, scopeId]);
-    const sets: string[] = [];
-    const vals: unknown[] = [];
-    for (const [key, val] of Object.entries(data)) {
-      if (key === "id" || key === "scope_id") continue;
-      sets.push(`${key} = ?`);
-      vals.push(val);
-    }
-    if (sets.length) {
-      vals.push(scopeId);
-      db.run(`UPDATE workflow_technical SET ${sets.join(", ")} WHERE scope_id = ?`, vals);
-    }
+  }
+
+  const sets: string[] = [];
+  const vals: unknown[] = [];
+  for (const [key, val] of Object.entries(processedData)) {
+    sets.push(`${key} = ?`);
+    vals.push(val);
+  }
+  if (sets.length) {
+    vals.push(scopeId);
+    db.run(`UPDATE workflow_technical SET ${sets.join(", ")} WHERE scope_id = ?`, vals);
   }
   saveDb();
 }
@@ -660,9 +794,13 @@ export async function getRefMasterData(category?: string) {
 
 // Generic table update helper
 export async function upsertRow(table: string, data: Record<string, unknown>) {
+  if (!ALLOWED_TABLES.has(table)) {
+    throw new Error(`Table "${table}" is not allowed`);
+  }
   const db = await getDb();
   const id = (data.id as string) || generateId();
   const cols = Object.keys(data).filter((k) => k !== "id");
+  validateColumns(table, cols);
   const placeholders = cols.map(() => "?").join(", ");
   const values = cols.map((k) => data[k]);
 
@@ -681,6 +819,9 @@ export async function upsertRow(table: string, data: Record<string, unknown>) {
 }
 
 export async function deleteRow(table: string, id: string) {
+  if (!ALLOWED_TABLES.has(table)) {
+    throw new Error(`Table "${table}" is not allowed`);
+  }
   const db = await getDb();
   db.run(`DELETE FROM ${table} WHERE id = ?`, [id]);
   saveDb();

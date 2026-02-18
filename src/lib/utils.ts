@@ -11,9 +11,11 @@ export function generateId(): string {
 
 export function generateShareToken(): string {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  const randomBytes = new Uint8Array(32);
+  crypto.getRandomValues(randomBytes);
   let result = "sk_";
-  for (let i = 0; i < 16; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  for (let i = 0; i < 32; i++) {
+    result += chars.charAt(randomBytes[i] % chars.length);
   }
   return result;
 }

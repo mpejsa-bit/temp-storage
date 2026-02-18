@@ -82,9 +82,17 @@ export function parseSfToken(req: Request): { accessToken: string; instanceUrl: 
   return { accessToken, instanceUrl };
 }
 
+function escapeSoql(input: string): string {
+  return input
+    .replace(/\\/g, "\\\\")
+    .replace(/'/g, "\\'")
+    .replace(/%/g, "\\%")
+    .replace(/_/g, "\\_");
+}
+
 export async function searchAccounts(accessToken: string, instanceUrl: string, query: string): Promise<SfAccount[]> {
   const conn = getConnectionFromToken(accessToken, instanceUrl);
-  const escaped = query.replace(/'/g, "\\'");
+  const escaped = escapeSoql(query);
 
   const results = await conn.query<SfAccount>(
     `SELECT Id, Name, BillingCity, BillingState, Website, Industry, NumberOfEmployees, Owner.Name
@@ -100,7 +108,7 @@ export async function searchAccounts(accessToken: string, instanceUrl: string, q
 export async function getAccountWithContacts(accessToken: string, instanceUrl: string, accountId: string): Promise<SfAccountDetail> {
   const conn = getConnectionFromToken(accessToken, instanceUrl);
 
-  if (!/^[a-zA-Z0-9]{15,18}$/.test(accountId)) {
+  if (!/^[a-zA-Z0-9]{15}$|^[a-zA-Z0-9]{18}$/.test(accountId)) {
     throw new Error("Invalid Account ID format");
   }
 
