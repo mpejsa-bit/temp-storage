@@ -177,7 +177,7 @@ export default function MasterDataTab() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider">MasterData Reference</h3>
+          <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Master Data Reference</h3>
           <p className="text-xs text-[var(--text-muted)] mt-1">
             Global dropdown values used by Overview tab. Click a value to edit, use + to add.
           </p>

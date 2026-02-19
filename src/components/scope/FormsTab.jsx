@@ -1,8 +1,8 @@
 "use client";
 import { useState } from "react";
-import { CrossTabBanner } from "./CrossTabBanner";
-import { Plus, Trash2, ClipboardList, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Trash2, ClipboardList, ChevronDown, ChevronRight, RotateCcw } from "lucide-react";
 import { useDebouncedCallback } from "@/hooks/useDebounce";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 const FORM_CATEGORIES = ["All", "Pre-Trip", "Post-Trip", "Dispatch", "Safety", "Compliance", "Custom"];
 const FIELD_TYPES = ["Text", "Number", "Multiple Choice", "Yes/No", "Date", "Time", "Signature", "Photo", "Barcode", "GPS", "Dropdown", "Multi-Select", "Section Header", "Paragraph"];
@@ -15,6 +15,7 @@ const DEFAULT_FORMS = [
 
 export default function FormsTab({ data, canEdit, onSave }) {
   const [expanded, setExpanded] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const forms = data.forms || [];
 
   const addForm = async () => {
@@ -160,11 +161,6 @@ export default function FormsTab({ data, canEdit, onSave }) {
 
   return (
     <div className="space-y-6">
-      <CrossTabBanner links={[
-        {field: "Form structure", source: "PS+ FORMS Table / PSE FORMS Table"},
-        {field: "Form counts", source: "Stats!B3 via COUNTA"},
-      ]}/>
-
       <div className="flex items-center justify-between">
         <p className="text-sm text-[var(--text-muted)]">
           Master form definitions with field-level builders. Each form links to a detailed field table (PS+ or PSE format).
@@ -174,6 +170,12 @@ export default function FormsTab({ data, canEdit, onSave }) {
             <button onClick={populateDefaults}
               className="flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 px-3 py-2 rounded-lg border border-emerald-500/20">
               <ClipboardList className="w-3.5 h-3.5"/> Populate Defaults
+            </button>
+          )}
+          {canEdit && forms.length > 0 && (
+            <button onClick={populateDefaults}
+              className="flex items-center gap-1.5 text-xs text-amber-400 hover:text-amber-300 bg-amber-500/10 px-3 py-2 rounded-lg border border-amber-500/20">
+              <RotateCcw className="w-3.5 h-3.5"/> Reset Defaults
             </button>
           )}
           {canEdit && (
@@ -211,7 +213,7 @@ export default function FormsTab({ data, canEdit, onSave }) {
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/15">{form.form_category}</span>
                   )}
                   {canEdit && (
-                    <button onClick={e => { e.stopPropagation(); deleteForm(form); }} className="text-red-400/40 hover:text-red-400">
+                    <button onClick={e => { e.stopPropagation(); setDeleteTarget(form); }} className="text-red-400/40 hover:text-red-400">
                       <Trash2 className="w-4 h-4"/>
                     </button>
                   )}
@@ -301,6 +303,16 @@ export default function FormsTab({ data, canEdit, onSave }) {
         PSE forms: {forms.filter(f => f.form_type === "pse").length} |
         Total fields: {forms.reduce((acc, f) => { try { return acc + JSON.parse(f.form_fields || "[]").length; } catch { return acc; } }, 0)}
       </div>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete Form"
+        message={`Are you sure you want to delete "${deleteTarget?.form_name || "this form"}"? This cannot be undone.`}
+        confirmLabel="Delete"
+        destructive
+        onConfirm={() => { deleteForm(deleteTarget); setDeleteTarget(null); }}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

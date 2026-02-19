@@ -1,19 +1,18 @@
 "use client";
-import { CrossTabBanner } from "./CrossTabBanner";
-import { Plus, Trash2, MessageSquare } from "lucide-react";
+import { Plus, Trash2, MessageSquare, RotateCcw } from "lucide-react";
 import { useDebouncedCallback } from "@/hooks/useDebounce";
 
 const DEFAULT_QUESTIONS = [
   {cat:"Technology & Integrations",q:"Of the legacy systems {fleet} is using today, what is the level of satisfaction with each?"},
   {cat:"Technology & Integrations",q:"What are some current pain points with how the telematics technology suite works today?"},
   {cat:"Technology & Integrations",q:"What are you looking to improve in transitioning to a new telematics solution?"},
-  {cat:"Technology & Integrations",q:"What software and or applications would you like to  integrate with the new telematics solution?"},
+  {cat:"Technology & Integrations",q:"What software and or applications would you like to integrate with the new telematics solution?"},
   {cat:"Technology & Integrations",q:"Which systems must be integrated?"},
   {cat:"Technology & Integrations",q:"Which systems would be nice to integrate?"},
   {cat:"Technology & Integrations",q:"Challenges with current system integrations?"},
   {cat:"Technology & Integrations",q:"How is system of record data synced across the various {fleet} data systems?"},
   {cat:"Technology & Integrations",q:"Is {fleet} using SSO today, which platform is being used?"},
-  {cat:"Technology & Integrations",q:"Are there any future capabilities that we haven’t capture that exist on {fleet}’s future roadmap?"},
+  {cat:"Technology & Integrations",q:"Are there any future capabilities that we haven't captured that exist on {fleet}'s future roadmap?"},
   {cat:"Safety & Compliance",q:"How is your Safety/Compliance department structured?"},
   {cat:"Safety & Compliance",q:"What does a day in the life of a Safety/Compliance manager look like at {fleet}?"},
   {cat:"Safety & Compliance",q:"What are your current ELD challenges in-cab? What about the back office?"},
@@ -28,13 +27,13 @@ const DEFAULT_QUESTIONS = [
   {cat:"Driver Experience & Workflow",q:"Walk us through your current day routine for jobs dispatch and tracking?"},
   {cat:"Driver Experience & Workflow",q:"How are load assignments handled today?"},
   {cat:"Driver Experience & Workflow",q:"Can drivers have pre-assigned or queued loads?"},
-  {cat:"Driver Experience & Workflow",q:"What are {fleet}’s expectations related to fully automated workflow?"},
+  {cat:"Driver Experience & Workflow",q:"What are {fleet}'s expectations related to fully automated workflow?"},
   {cat:"Driver Experience & Workflow",q:"What current applications are used in completing day to day job tasks?"},
-  {cat:"Driver Experience & Workflow",q:"What applications reside on the in-cab TSP device?"},
+  {cat:"Driver Experience & Workflow",q:"What applications reside on the in-cab telematics provider device?"},
   {cat:"Driver Experience & Workflow",q:"What applications reside on a driver supplied device (phone)?"},
   {cat:"Driver Experience & Workflow",q:"Are there any other devices used in-cab for Job data capture?"},
   {cat:"Driver Experience & Workflow",q:"Common areas of data validation challenges?"},
-  {cat:"Driver Experience & Workflow",q:"What are some of the in cab driver challenges with your present TSP?"},
+  {cat:"Driver Experience & Workflow",q:"What are some of the in cab driver challenges with your present telematics provider?"},
   {cat:"Driver Experience & Workflow",q:"How is driver training and support handled today?"},
   {cat:"Equipment & Maintenance",q:"How do you use telematics today for fleet maintenance?"},
   {cat:"Equipment & Maintenance",q:"Are your currently using any OEM diagnostics services? For instance, Cummins Connect, Eaton Intelliconnect, or Navistar OnCommand?"},
@@ -49,10 +48,10 @@ const DEFAULT_QUESTIONS = [
   {cat:"Back Office Integrations",q:"Who would be your key stakeholders throughout a telematics change?"},
   {cat:"Back Office Integrations",q:"Do you have an identified project manager?"},
   {cat:"Back Office Integrations",q:"Are you planning on handling integrations in-house? Alternatively, do you have a preferred integration partner you use today?"},
-  {cat:"Back Office Integrations",q:"What’s the size and bandwidth of your {fleet} Training Team?"},
+  {cat:"Back Office Integrations",q:"What's the size and bandwidth of your {fleet} Training Team?"},
   {cat:"Back Office Integrations",q:"What would be your preferred training strategy? For instance, train-the-trainer, remote training, hands-on workshops or a combination of all three?"},
   {cat:"Back Office Integrations",q:"How does your team support ongoing training and management of feature releases to drivers and back office staff?"},
-  {cat:"Back Office Integrations",q:"TMS creates initial workflow job from customer data, typically this will be the TMS the customer is using i.e.TMWSuite. Often, the driver will not be located where the trip is expected to begin."},];
+];
 
 export default function WorkshopTab({ data, canEdit, onSave }) {
   const fleet = data.fleet_name || "Fleet";
@@ -95,16 +94,11 @@ export default function WorkshopTab({ data, canEdit, onSave }) {
 
   return (
     <div className="space-y-6">
-      <CrossTabBanner links={[
-        {field: "Fleet Name in questions", source: "Overview!B2"},
-        {field: "Question text interpolation", source: "=CONCATENATE(..., Overview!B2, ...)"},
-      ]}/>
-
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm text-[var(--text-muted)]">
             Presale workshop questions with responses. Fleet name{" "}
-            <span className="text-cyan-400 font-mono text-xs">({fleet})</span>{" "}
+            <span className="text-blue-400 font-medium text-xs">({fleet})</span>{" "}
             is auto-inserted into question text.
           </p>
         </div>
@@ -116,6 +110,15 @@ export default function WorkshopTab({ data, canEdit, onSave }) {
             >
               <MessageSquare className="w-3.5 h-3.5"/>
               Populate Default Questions ({DEFAULT_QUESTIONS.length})
+            </button>
+          )}
+          {canEdit && questions.length > 0 && (
+            <button
+              onClick={populateDefaults}
+              className="flex items-center gap-1.5 text-xs text-amber-400 hover:text-amber-300 bg-amber-500/10 px-3 py-2 rounded-lg border border-amber-500/20 transition"
+            >
+              <RotateCcw className="w-3.5 h-3.5"/>
+              Reset Defaults
             </button>
           )}
           {canEdit && (
@@ -133,7 +136,7 @@ export default function WorkshopTab({ data, canEdit, onSave }) {
         <div className="text-center py-16 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl">
           <MessageSquare className="w-12 h-12 text-[#2a3a55] mx-auto mb-4"/>
           <p className="text-[var(--text-muted)] text-sm mb-2">No workshop questions yet.</p>
-          <p className="text-[var(--text-muted)] text-xs">Click the green button above to populate with the standard 20-question set.</p>
+          <p className="text-[var(--text-muted)] text-xs">Click the green button above to populate with the standard {DEFAULT_QUESTIONS.length}-question set.</p>
         </div>
       ) : (
         <div className="space-y-6">
@@ -158,12 +161,6 @@ export default function WorkshopTab({ data, canEdit, onSave }) {
                           />
                         ) : (
                           <p className="text-sm text-[var(--text)] font-medium">{q.question}</p>
-                        )}
-
-                        {q.question?.includes(fleet) && (
-                          <span className="text-[10px] text-cyan-400/60 font-mono mt-1 inline-block">
-                            fleet name from Overview!B2
-                          </span>
                         )}
 
                         <div className="mt-3">

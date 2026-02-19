@@ -18,7 +18,7 @@ export default function SharePage() {
   const ov = data.overview || {};
   return (
     <div className="min-h-screen">
-      <header className="border-b border-[#2a3a55] bg-[#111827]/80 px-6 py-4"><div className="max-w-5xl mx-auto flex items-center gap-3"><Layers className="w-5 h-5 text-blue-400"/><span className="font-bold">Scope Platform</span><span className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded">Shared View</span></div></header>
+      <header className="border-b border-[#2a3a55] bg-[#111827]/80 px-6 py-4"><div className="max-w-5xl mx-auto flex items-center gap-3"><Layers className="w-5 h-5 text-blue-400"/><span className="font-bold">Solution Scoping Document</span><span className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded">Shared View</span></div></header>
       <main className="max-w-5xl mx-auto px-6 py-8">
         <h1 className="text-3xl font-bold mb-2">{data.fleet_name}</h1>
         <p className="text-blue-300 bg-blue-500/10 border border-blue-500/20 rounded-lg px-4 py-3 text-sm mb-8">{data.fleet_name} is a {ov.fleet_size_label||"—"} {ov.type_of_operation||"—"} {ov.current_technology||"—"} {ov.fleet_persona||"—"} fleet</p>

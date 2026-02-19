@@ -18,6 +18,7 @@ export async function getDb(): Promise<Database> {
   try {
     const buffer = await fs.readFile(DB_PATH);
     db = new SQL.Database(buffer);
+    runMigrations(db);
   } catch {
     db = new SQL.Database();
     initSchema(db);
@@ -363,9 +364,62 @@ function initSchema(db: Database) {
       psplus_ip_whitelist TEXT,
       psplus_integration_username TEXT,
       psplus_integration_pw TEXT,
-      psplus_enterprise_id TEXT
+      psplus_enterprise_id TEXT,
+      -- Other Technology Applications
+      tech_tpms TEXT,
+      tech_trailer_tracking TEXT,
+      tech_freight_visibility TEXT,
+      tech_lane_departure TEXT,
+      tech_incab_navigation TEXT,
+      tech_trailer_tracking_tms TEXT,
+      tech_video_safety TEXT,
+      tech_load_optimization TEXT,
+      tech_lms TEXT,
+      tech_trailer_temp TEXT,
+      tech_video_camera TEXT,
+      tech_quotes TEXT,
+      tech_fuel_management TEXT,
+      tech_scanning TEXT,
+      tech_incab_safety TEXT,
+      tech_route_compliance TEXT,
+      tech_fuel_tax TEXT,
+      tech_truck_stop TEXT,
+      tech_incab_coaching TEXT,
+      tech_mdm TEXT,
+      tech_fuel_optimization TEXT,
+      tech_maintenance TEXT,
+      tech_training TEXT,
+      tech_speed_control TEXT,
+      tech_fuel_cards TEXT,
+      tech_weigh_station TEXT,
+      tech_compliance TEXT,
+      tech_speeding_posted TEXT,
+      tech_driver_companion TEXT,
+      tech_scales TEXT,
+      tech_payroll TEXT,
+      tech_incab_wellness TEXT,
+      tech_custom TEXT
     );
   `);
 
   saveDb();
+}
+
+function runMigrations(db: Database) {
+  const techAppCols = [
+    "tech_tpms","tech_trailer_tracking","tech_freight_visibility","tech_lane_departure",
+    "tech_incab_navigation","tech_trailer_tracking_tms","tech_video_safety","tech_load_optimization",
+    "tech_lms","tech_trailer_temp","tech_video_camera","tech_quotes",
+    "tech_fuel_management","tech_scanning","tech_incab_safety","tech_route_compliance",
+    "tech_fuel_tax","tech_truck_stop","tech_incab_coaching","tech_mdm",
+    "tech_fuel_optimization","tech_maintenance","tech_training","tech_speed_control",
+    "tech_fuel_cards","tech_weigh_station","tech_compliance","tech_speeding_posted",
+    "tech_driver_companion","tech_scales","tech_payroll","tech_incab_wellness",
+    "tech_custom",
+  ];
+  let changed = false;
+  for (const col of techAppCols) {
+    try { db.run(`ALTER TABLE workflow_technical ADD COLUMN ${col} TEXT`); changed = true; } catch {}
+  }
+  if (changed) saveDb();
 }

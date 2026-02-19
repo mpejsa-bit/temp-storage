@@ -1,13 +1,12 @@
 "use client";
-import { CrossTabBanner } from "./CrossTabBanner";
-import { Plus, Trash2, GraduationCap } from "lucide-react";
+import { Plus, Trash2, GraduationCap, RotateCcw } from "lucide-react";
 import { useDebouncedCallback } from "@/hooks/useDebounce";
 
 const DEFAULT_TRAINING_QS = [
   {cat:"Driver Training", q:"What is the size and bandwidth of your {fleet} Training Team?"},
   {cat:"Driver Training", q:"How does driver onboarding work today at {fleet}?"},
   {cat:"Driver Training", q:"What devices and materials do drivers currently receive during orientation?"},
-  {cat:"Driver Training", q:"What LMS platform does {fleet} currently use?"},
+  {cat:"Driver Training", q:"What LMS (Learning Management System) platform does {fleet} currently use?"},
   {cat:"Driver Training", q:"How are ongoing training updates communicated to drivers in the field?"},
   {cat:"Admin/Dispatch Training", q:"How many dispatchers/fleet managers need to be trained?"},
   {cat:"Admin/Dispatch Training", q:"What does the current dispatcher onboarding process look like?"},
@@ -61,16 +60,11 @@ export default function TrainingTab({ data, canEdit, onSave }) {
 
   return (
     <div className="space-y-6">
-      <CrossTabBanner links={[
-        {field: "Fleet Name in questions", source: "Overview!B2"},
-        {field: "Fleet summary banner", source: "=CONCATENATE(Overview!B2, ...)"},
-      ]}/>
-
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm text-[var(--text-muted)]">
-            Training assessment questions for TAM. Fleet name{" "}
-            <span className="text-cyan-400 font-mono text-xs">({fleet})</span>{" "}
+            Training assessment questions for Training Account Manager. Fleet name{" "}
+            <span className="text-blue-400 font-medium text-xs">({fleet})</span>{" "}
             is auto-inserted.
           </p>
         </div>
@@ -80,6 +74,13 @@ export default function TrainingTab({ data, canEdit, onSave }) {
               className="flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 px-3 py-2 rounded-lg border border-emerald-500/20 transition">
               <GraduationCap className="w-3.5 h-3.5"/>
               Populate Default Questions ({DEFAULT_TRAINING_QS.length})
+            </button>
+          )}
+          {canEdit && questions.length > 0 && (
+            <button onClick={populateDefaults}
+              className="flex items-center gap-1.5 text-xs text-amber-400 hover:text-amber-300 bg-amber-500/10 px-3 py-2 rounded-lg border border-amber-500/20 transition">
+              <RotateCcw className="w-3.5 h-3.5"/>
+              Reset Defaults
             </button>
           )}
           {canEdit && (
@@ -95,7 +96,7 @@ export default function TrainingTab({ data, canEdit, onSave }) {
         <div className="text-center py-16 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl">
           <GraduationCap className="w-12 h-12 text-[#2a3a55] mx-auto mb-4"/>
           <p className="text-[var(--text-muted)] text-sm mb-2">No training questions yet.</p>
-          <p className="text-[var(--text-muted)] text-xs">Click the green button above to populate the standard 12-question set.</p>
+          <p className="text-[var(--text-muted)] text-xs">Click the green button above to populate the standard {DEFAULT_TRAINING_QS.length}-question set.</p>
         </div>
       ) : (
         <div className="space-y-6">
@@ -124,9 +125,9 @@ export default function TrainingTab({ data, canEdit, onSave }) {
                               rows={2} value={q.response || ""} onChange={e => updateQuestion(q, "response", e.target.value)} disabled={!canEdit} placeholder="Response..."/>
                           </div>
                           <div>
-                            <label className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">Comments</label>
+                            <label className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">Internal Comments</label>
                             <textarea className="w-full mt-1 px-3 py-2 bg-[var(--bg)] border border-[var(--border)] rounded-lg text-[var(--text)] text-sm focus:outline-none focus:border-blue-500 resize-y disabled:opacity-50"
-                              rows={2} value={q.comments || ""} onChange={e => updateQuestion(q, "comments", e.target.value)} disabled={!canEdit} placeholder="Comments..."/>
+                              rows={2} value={q.comments || ""} onChange={e => updateQuestion(q, "comments", e.target.value)} disabled={!canEdit} placeholder="Internal comments..."/>
                           </div>
                         </div>
                       </div>

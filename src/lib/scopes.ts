@@ -89,6 +89,15 @@ const ALLOWED_COLUMNS: Record<string, Set<string>> = {
     "psplus_cid_prod", "psplus_cid_test", "psplus_cid_dev",
     "psplus_ip_whitelist", "psplus_integration_username",
     "psplus_integration_pw", "psplus_enterprise_id",
+    "tech_tpms", "tech_trailer_tracking", "tech_freight_visibility", "tech_lane_departure",
+    "tech_incab_navigation", "tech_trailer_tracking_tms", "tech_video_safety", "tech_load_optimization",
+    "tech_lms", "tech_trailer_temp", "tech_video_camera", "tech_quotes",
+    "tech_fuel_management", "tech_scanning", "tech_incab_safety", "tech_route_compliance",
+    "tech_fuel_tax", "tech_truck_stop", "tech_incab_coaching", "tech_mdm",
+    "tech_fuel_optimization", "tech_maintenance", "tech_training", "tech_speed_control",
+    "tech_fuel_cards", "tech_weigh_station", "tech_compliance", "tech_speeding_posted",
+    "tech_driver_companion", "tech_scales", "tech_payroll", "tech_incab_wellness",
+    "tech_custom",
   ]),
 };
 

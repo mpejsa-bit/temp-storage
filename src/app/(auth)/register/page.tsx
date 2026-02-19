@@ -3,17 +3,23 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { Eye, EyeOff } from "lucide-react";
 
 export default function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  const pwMismatch = confirmPw.length > 0 && password !== confirmPw;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (password !== confirmPw) { setError("Passwords do not match"); return; }
     setError("");
     setLoading(true);
 
@@ -46,7 +52,7 @@ export default function RegisterPage() {
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 border border-blue-500/20 rounded-full text-xs font-semibold text-blue-400 tracking-wider uppercase mb-6">
             <span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" />
-            Scope Platform
+            Solution Scoping Document
           </div>
           <h1 className="text-3xl font-bold text-[var(--text)] mb-2">Create your account</h1>
           <p className="text-[var(--text-secondary)]">Start building solution scoping documents</p>
@@ -61,54 +67,46 @@ export default function RegisterPage() {
 
           <div>
             <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Full Name</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
+            <input type="text" value={name} onChange={(e) => setName(e.target.value)} required
               className="w-full px-4 py-3 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
-              placeholder="Jane Smith"
-            />
+              placeholder="Jane Smith"/>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required
               className="w-full px-4 py-3 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
-              placeholder="you@company.com"
-            />
+              placeholder="you@company.com"/>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={8}
-              className="w-full px-4 py-3 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
-              placeholder="Min. 8 characters"
-            />
+            <div className="relative">
+              <input type={showPw ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8}
+                className="w-full px-4 py-3 pr-12 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
+                placeholder="Min. 8 characters"/>
+              <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text)]">
+                {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-600/50 text-[var(--text)] font-semibold rounded-lg transition"
-          >
-            {loading ? "Creating account…" : "Create account"}
+          <div>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Confirm Password</label>
+            <input type={showPw ? "text" : "password"} value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} required
+              className={`w-full px-4 py-3 bg-[var(--bg-secondary)] border rounded-lg text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-1 transition ${pwMismatch ? "border-red-500 focus:border-red-500 focus:ring-red-500" : "border-[var(--border)] focus:border-blue-500 focus:ring-blue-500"}`}
+              placeholder="Re-enter password"/>
+            {pwMismatch && <p className="text-xs text-red-400 mt-1">Passwords do not match</p>}
+          </div>
+
+          <button type="submit" disabled={loading || pwMismatch}
+            className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-600/50 text-white font-semibold rounded-lg transition">
+            {loading ? "Creating account..." : "Create account"}
           </button>
 
           <p className="text-center text-sm text-[var(--text-muted)]">
             Already have an account?{" "}
-            <Link href="/login" className="text-blue-400 hover:text-blue-300">
-              Sign in
-            </Link>
+            <Link href="/login" className="text-blue-400 hover:text-blue-300">Sign in</Link>
           </p>
         </form>
       </div>

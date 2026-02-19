@@ -30,7 +30,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   // Dynamic import to avoid bundling issues
   const ExcelJS = (await import("exceljs")).default;
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Scope Platform";
+  workbook.creator = "Solution Scoping Document";
 
   const headerStyle = { font: { bold: true, color: { argb: "FFFFFFFF" } }, fill: { type: "pattern" as const, pattern: "solid" as const, fgColor: { argb: "FF1e3a5f" } } };
   const ov = (overview || {}) as Record<string, unknown>;

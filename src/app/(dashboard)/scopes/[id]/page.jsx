@@ -1,10 +1,11 @@
 "use client";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Users, Copy, X, Plus, Trash2, Building2, Phone, ShoppingBag, Puzzle, AlertTriangle, MessageSquare, GraduationCap, ClipboardList, Workflow, Calendar, BarChart3, Check, Link2, Home, Database, Download, ChevronDown } from "lucide-react";
+import { ArrowLeft, Users, Copy, X, Plus, Trash2, Building2, Phone, ShoppingBag, Puzzle, AlertTriangle, MessageSquare, GraduationCap, ClipboardList, Workflow, Calendar, BarChart3, Check, Link2, Home, Database, Download, ChevronDown, ExternalLink, ChevronRight } from "lucide-react";
 import { useDebounce, useDebouncedCallback } from "@/hooks/useDebounce";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { FleetSummary, CrossTabBanner } from "@/components/scope/CrossTabBanner";
+import { FleetSummary } from "@/components/scope/CrossTabBanner";
+import { useToast } from "@/components/Toast";
 import WorkflowTabComp from "@/components/scope/WorkflowTab";
 import WorkshopTabComp from "@/components/scope/WorkshopTab";
 import SolutionLinkedSection from "@/components/scope/SolutionLinkedSection";
@@ -18,8 +19,8 @@ function formatPhone(value) {
   const digits = (value||'').replace(/\D/g,'').slice(0,10);
   if(!digits) return '';
   if(digits.length<=3) return `(${digits}`;
-  if(digits.length<=6) return `(${digits.slice(0,3)})-${digits.slice(3)}`;
-  return `(${digits.slice(0,3)})-${digits.slice(3,6)}-${digits.slice(6)}`;
+  if(digits.length<=6) return `(${digits.slice(0,3)}) ${digits.slice(3)}`;
+  return `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`;
 }
 
 function isValidEmail(v) {
@@ -42,7 +43,7 @@ function ContactEmailInput({val,onChange,dis}) {
 }
 
 function ContactPhoneInput({val,onChange,dis}) {
-  return <input className="bg-transparent border-none text-[var(--text-secondary)] text-sm focus:outline-none" value={formatPhone(val)} onChange={e=>onChange(formatPhone(e.target.value))} disabled={dis} placeholder="(000)-000-0000" size={14}/>;
+  return <input className="bg-transparent border-none text-[var(--text-secondary)] text-sm focus:outline-none" value={formatPhone(val)} onChange={e=>onChange(formatPhone(e.target.value))} disabled={dis} placeholder="(000) 000-0000" size={14}/>;
 }
 
 const TABS = [
@@ -57,7 +58,7 @@ const TABS = [
   { id: "forms", label: "Forms", icon: ClipboardList },
   { id: "install", label: "Install Strategy", icon: Calendar },
   { id: "workflow", label: "Workflow Integration", icon: Workflow },
-  { id: "master_data", label: "MasterData", icon: Database, children: [
+  { id: "master_data", label: "Master Data", icon: Database, children: [
     { id: "sf_lookup", label: "SF Lookup" },
     { id: "km_lookup", label: "KM Lookup" },
   ]},
@@ -65,44 +66,59 @@ const TABS = [
   { id: "sharing", label: "Sharing & Team", icon: Users },
 ];
 
-function Field({ label, value, onChange, disabled, type="text", options, placeholder, wide }) {
+function Field({ label, value, onChange, disabled, type="text", options, placeholder, wide, hint }) {
   const cls = "w-full px-3 py-2 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-[var(--text)] text-sm placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500 transition disabled:opacity-50";
   return (
     <div className={wide?"col-span-2":""}>
       <label className="block text-xs font-medium text-[var(--text-muted)] mb-1.5 uppercase tracking-wider">{label}</label>
+      {hint && <p className="text-[10px] text-[var(--text-muted)] mb-1">{hint}</p>}
       {type==="select"&&options ? <select value={value||""} onChange={e=>onChange(e.target.value)} disabled={disabled} className={cls}><option value="">— Select —</option>{options.map(o=><option key={o} value={o}>{o}</option>)}</select>
       : type==="textarea" ? <textarea value={value||""} onChange={e=>onChange(e.target.value)} disabled={disabled} rows={3} className={cls} placeholder={placeholder}/>
-      : type==="number" ? <input type="number" value={value??""} onChange={e=>onChange(e.target.value?parseInt(e.target.value):null)} disabled={disabled} className={cls} placeholder={placeholder}/>
-      : type==="checkbox" ? <button type="button" onClick={()=>!disabled&&onChange(value?0:1)} disabled={disabled} className={`w-6 h-6 rounded border ${value?"bg-blue-600 border-blue-500":"bg-[var(--bg-secondary)] border-[var(--border)]"} flex items-center justify-center`}>{value?<Check className="w-4 h-4 text-[var(--text)]"/>:null}</button>
+      : type==="number" ? <input type="number" value={value??""} onChange={e=>onChange(e.target.value?parseInt(e.target.value):null)} disabled={disabled} className={cls} placeholder={placeholder} min="0"/>
+      : type==="checkbox" ? <button type="button" role="checkbox" aria-checked={!!value} tabIndex={0} onClick={()=>!disabled&&onChange(value?0:1)} onKeyDown={e=>{if((e.key===" "||e.key==="Enter")&&!disabled){e.preventDefault();onChange(value?0:1);}}} disabled={disabled} className={`w-6 h-6 rounded border ${value?"bg-blue-600 border-blue-500":"bg-[var(--bg-secondary)] border-[var(--border)]"} flex items-center justify-center`}>{value?<Check className="w-4 h-4 text-[var(--text)]"/>:null}</button>
       : <input type={type} value={value||""} onChange={e=>onChange(e.target.value)} disabled={disabled} className={cls} placeholder={placeholder}/>}
     </div>
   );
 }
 
+function UrlField({ label, value, onChange, disabled, placeholder }) {
+  const cls = "w-full px-3 py-2 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-[var(--text)] text-sm placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500 transition disabled:opacity-50";
+  return (
+    <div>
+      <label className="block text-xs font-medium text-[var(--text-muted)] mb-1.5 uppercase tracking-wider">{label}</label>
+      <div className="flex gap-2">
+        <input type="text" value={value||""} onChange={e=>onChange(e.target.value)} disabled={disabled} className={cls} placeholder={placeholder||"https://..."}/>
+        {value && <a href={value.startsWith("http")?value:`https://${value}`} target="_blank" rel="noopener noreferrer" className="flex items-center px-2 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-blue-400 hover:text-blue-300" onClick={e=>e.stopPropagation()}><ExternalLink className="w-4 h-4"/></a>}
+      </div>
+    </div>
+  );
+}
+
 function OverviewTab({ data, canEdit, onSave, refData }) {
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date().toLocaleDateString("en-US",{month:"2-digit",day:"2-digit",year:"numeric"});
   const initOv = (o) => ({...o, date_lead_provided: o?.date_lead_provided || today});
   const [ov, setOv] = useState(initOv(data.overview||{}));
   const set = (k,v) => setOv(p=>({...p,[k]:v}));
-  useEffect(()=>{setOv(initOv(data.overview||{}))},[data.overview]);
+  const prevOvJson = useRef(JSON.stringify(data.overview||{}));
+  useEffect(()=>{const json=JSON.stringify(data.overview||{});if(json!==prevOvJson.current){prevOvJson.current=json;setOv(initOv(data.overview||{}));}},[data.overview]);
   const debouncedOv = useDebounce(ov, 800);
-  const mountedRef = useRef(false);
-  useEffect(()=>{if(!mountedRef.current){mountedRef.current=true;return;}if(canEdit) onSave("overview",debouncedOv);},[debouncedOv]);
+  const lastSavedOvJson = useRef(JSON.stringify(initOv(data.overview||{})));
+  useEffect(()=>{const json=JSON.stringify(debouncedOv);if(json===lastSavedOvJson.current) return;lastSavedOvJson.current=json;if(canEdit) onSave("overview",debouncedOv);},[debouncedOv]);
   const ref = (cat, fallback=[]) => refData[cat]?.length ? refData[cat] : fallback;
   return (
     <div className="space-y-8">
       <div className="bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/20 rounded-xl p-5">
         <p className="text-sm text-blue-300 font-medium">{data.fleet_name} is a {ov.fleet_size_label||"—"} {ov.type_of_operation||"—"} {ov.current_technology||"—"} {ov.fleet_persona||"—"} fleet</p>
-        <p className="text-xs text-[var(--text-muted)] mt-1">↑ Auto-computed summary (mirrors START HERE tab)</p>
+        <p className="text-xs text-[var(--text-muted)] mt-1">Auto-computed fleet summary</p>
       </div>
       <section><h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">Fleet Profile</h3>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Fleet Name" value={ov.fleet_name??data.fleet_name} onChange={v=>set("fleet_name",v)} disabled={!canEdit}/>
-          <CityAutocomplete label="HQ Location" value={ov.hq_location} onChange={v=>set("hq_location",v)} onCitySelect={(city)=>{set("hq_location",`${city.city}, ${city.state}`);set("fleet_timezone",city.timezone);}} disabled={!canEdit} placeholder="City, ST"/>
-          <Field label="PS Platform" value={ov.ps_platform} onChange={v=>set("ps_platform",v)} disabled={!canEdit} type="select" options={ref("ps_platform",["PS Enterprise","PS+"])}/>
-          <Field label="Fleet Timezone" value={ov.fleet_timezone} onChange={v=>set("fleet_timezone",v)} disabled={!canEdit} type="select" options={ref("fleet_timezone",["Eastern","Central","Mountain","Pacific","Alaska","Hawaii"])}/>
+          <CityAutocomplete label="HQ Location" value={ov.hq_location} onChange={v=>set("hq_location",v)} onCitySelect={(city)=>{set("hq_location",`${city.city}, ${city.state}`);set("fleet_timezone",city.timezone);}} disabled={!canEdit} placeholder="City, ST (US only)"/>
+          <Field label="PS Platform" value={ov.ps_platform} onChange={v=>set("ps_platform",v)} disabled={!canEdit} type="select" options={ref("ps_platform",["PS Enterprise","PS+"])} hint="Platform Science product line"/>
+          <Field label="Fleet Timezone" value={ov.fleet_timezone} onChange={v=>set("fleet_timezone",v)} disabled={!canEdit} type="select" options={ref("fleet_timezone",["Eastern","Central","Mountain","Pacific","Alaska","Hawaii"])} hint="Auto-set when selecting a US city"/>
           <Field label="Current Technology" value={ov.current_technology} onChange={v=>set("current_technology",v)} disabled={!canEdit} type="select" options={ref("current_technology",["Pre-Mobility","Mobility"])}/>
-          <Field label="Fleet Persona" value={ov.fleet_persona} onChange={v=>set("fleet_persona",v)} disabled={!canEdit} type="select" options={ref("fleet_persona",["Innovator","Early Adopter","Early Majority","Late Majority","Influencer"])}/>
+          <Field label="Fleet Persona" value={ov.fleet_persona} onChange={v=>set("fleet_persona",v)} disabled={!canEdit} type="select" options={ref("fleet_persona",["Innovator","Early Adopter","Early Majority","Late Majority","Influencer"])} hint="Technology adoption profile"/>
           <Field label="Type of Company" value={ov.type_of_company} onChange={v=>set("type_of_company",v)} disabled={!canEdit} type="select" options={ref("company_type",["Private Fleet/Shipper","Brokerage/3PL","Maintenance Service Center","Fuel/Energy","Autohauler"])}/>
           <Field label="Type of Operation" value={ov.type_of_operation} onChange={v=>set("type_of_operation",v)} disabled={!canEdit} type="select" options={ref("operation_type",["General Freight","Reefer","LTL","Retail/Wholesale","Bulk/Petrol/Chem/Tanker","Intermodal"])}/>
         </div>
@@ -124,14 +140,14 @@ function OverviewTab({ data, canEdit, onSave, refData }) {
           <Field label="Future TMS Type" value={ov.future_tms_type} onChange={v=>set("future_tms_type",v)} disabled={!canEdit} type="select" options={ref("tms_type",["Cloud","Hosted","SaaS","On-Prem"])}/>
         </div>
       </section>
-      <section><h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">Links & References</h3>
+      <section><h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">Account & Links</h3>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Account Executive" value={ov.account_executive} onChange={v=>set("account_executive",v)} disabled={!canEdit}/>
-          <Field label="Date Lead Provided" value={ov.date_lead_provided} onChange={v=>set("date_lead_provided",v)} disabled={!canEdit} type="date"/>
-          <Field label="Contract Link" value={ov.contract_link} onChange={v=>set("contract_link",v)} disabled={!canEdit} placeholder="URL"/>
-          <Field label="SF Opportunity Link" value={ov.sf_opportunity_link} onChange={v=>set("sf_opportunity_link",v)} disabled={!canEdit} placeholder="URL"/>
-          <Field label="Master Notes" value={ov.master_notes_link} onChange={v=>set("master_notes_link",v)} disabled={!canEdit} placeholder="URL"/>
-          <Field label="Customer Dossier" value={ov.customer_dossier_link} onChange={v=>set("customer_dossier_link",v)} disabled={!canEdit} placeholder="URL"/>
+          <Field label="Date Lead Provided" value={ov.date_lead_provided} onChange={v=>set("date_lead_provided",v)} disabled={!canEdit} placeholder="MM/DD/YYYY"/>
+          <UrlField label="Contract Link" value={ov.contract_link} onChange={v=>set("contract_link",v)} disabled={!canEdit}/>
+          <UrlField label="SF Opportunity Link" value={ov.sf_opportunity_link} onChange={v=>set("sf_opportunity_link",v)} disabled={!canEdit}/>
+          <UrlField label="Master Notes" value={ov.master_notes_link} onChange={v=>set("master_notes_link",v)} disabled={!canEdit}/>
+          <UrlField label="Customer Dossier" value={ov.customer_dossier_link} onChange={v=>set("customer_dossier_link",v)} disabled={!canEdit}/>
         </div>
       </section>
       {/* Hardware Overview (rows 47-58) */}
@@ -141,7 +157,7 @@ function OverviewTab({ data, canEdit, onSave, refData }) {
             {["Item","Type","SKU","Expected Amount","Notes"].map(h=><th key={h} className="text-left px-4 py-3 text-xs text-[var(--text-secondary)] font-semibold">{h}</th>)}
           </tr></thead><tbody>
             {(()=>{let hw=[];try{hw=JSON.parse(ov.hardware_json||"[]")}catch{}
-              if(!hw.length) hw=["Tablets","OBC (PS+)","Ball","Arms","Knox Provisioning","CVDs","Cable 1","Cable 2","Cable 3","Cable 4"].map(n=>({name:n,type:"",sku:"",amount:"",notes:""}));
+              if(!hw.length) hw=["Tablets","On-Board Computer (PS+)","Ball Mount","Mounting Arms","Knox Provisioning","Camera Video Devices","Cable 1","Cable 2","Cable 3","Cable 4"].map(n=>({name:n,type:"",sku:"",amount:"",notes:""}));
               return hw.map((h,i)=>(
                 <tr key={i} className="border-t border-[var(--border)]/50 hover:bg-[var(--bg-card)]">
                   <td className="px-4 py-2 text-[var(--text)] font-medium text-xs">{h.name}</td>
@@ -155,7 +171,7 @@ function OverviewTab({ data, canEdit, onSave, refData }) {
       {/* Vehicle Breakdown (rows 59-91) */}
       <section><h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">Vehicle Breakdown</h3>
         <div className="grid grid-cols-2 gap-4 mb-4">
-          <Field label="Vehicle List Link" value={ov.vehicle_list_link} onChange={v=>set("vehicle_list_link",v)} disabled={!canEdit} placeholder="URL"/>
+          <UrlField label="Vehicle List Link" value={ov.vehicle_list_link} onChange={v=>set("vehicle_list_link",v)} disabled={!canEdit}/>
         </div>
         <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl overflow-auto">
           <table className="w-full text-sm"><thead><tr className="bg-blue-500/20/50">
@@ -206,10 +222,22 @@ function OverviewTab({ data, canEdit, onSave, refData }) {
 
 function ContactsTab({ data, canEdit, onSave }) {
   const [contacts, setContacts] = useState(data.contacts || []);
-  useEffect(() => { setContacts(data.contacts || []); }, [data.contacts]);
+  const prevContactsJson = useRef(JSON.stringify(data.contacts||[]));
+  useEffect(() => { const json=JSON.stringify(data.contacts||[]);if(json!==prevContactsJson.current){prevContactsJson.current=json;setContacts(data.contacts || []);} }, [data.contacts]);
   const debouncedContacts = useDebounce(contacts, 800);
-  const contactsMountedRef = useRef(false);
-  useEffect(()=>{if(!contactsMountedRef.current){contactsMountedRef.current=true;return;}if(canEdit) onSave("contacts",debouncedContacts,"bulk");},[debouncedContacts]);
+  const lastSavedContactsJson = useRef(JSON.stringify(data.contacts||[]));
+  useEffect(()=>{const json=JSON.stringify(debouncedContacts);if(json===lastSavedContactsJson.current) return;lastSavedContactsJson.current=json;if(canEdit) onSave("contacts",debouncedContacts,"bulk");},[debouncedContacts]);
+
+  // Auto-fill Account Executive name from Overview
+  const aeFromOverview = data.overview?.account_executive || "";
+  useEffect(() => {
+    if (!aeFromOverview) return;
+    setContacts(prev => {
+      const ae = prev.find(c => c.contact_type === "ps_team" && c.role_title === "Account Executive");
+      if (ae && !ae.name) return prev.map(c => c.id === ae.id ? { ...c, name: aeFromOverview } : c);
+      return prev;
+    });
+  }, [aeFromOverview]);
 
   const ps = contacts.filter(c=>c.contact_type==="ps_team");
   const fleet = contacts.filter(c=>c.contact_type==="fleet");
@@ -218,19 +246,8 @@ function ContactsTab({ data, canEdit, onSave }) {
 
   return (
     <div className="space-y-8">
-      <CrossTabBanner links={[
-        {field: "Header banner", source: "Overview!C1"},
-        {field: "Account Executive", source: "Overview!H3"},
-      ]}/>
-      {/* Contacts!B3 = Overview!H3 (AE name in header) */}
-      {data.overview?.account_executive && (
-        <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-3 flex items-center gap-3">
-          <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">Account Executive:</span>
-          <span className="text-sm text-[var(--text)] font-medium">{data.overview.account_executive}</span>
-          <span className="text-[10px] text-cyan-400/60 font-mono ml-auto">← Overview!H3</span>
-        </div>
-      )}
-      <div><h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">PS Team</h3>
+      <div><h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2">PS Team</h3>
+        <p className="text-xs text-[var(--text-muted)] mb-4">Platform Science internal team members. Role names are preset and cannot be changed.</p>
         <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl overflow-hidden"><table className="w-full text-sm"><thead><tr className="bg-blue-500/20/50">
           {["Role","Name","Email","Phone"].map(h=><th key={h} className="text-left px-4 py-3 text-xs text-[var(--text-secondary)] font-semibold">{h}</th>)}
         </tr></thead><tbody>{ps.map(c=>(
@@ -242,7 +259,8 @@ function ContactsTab({ data, canEdit, onSave }) {
           </tr>))}</tbody></table></div>
       </div>
       <div><div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Fleet Contacts</h3>
+        <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-0.5">Fleet Contacts</h3>
+        <p className="text-xs text-[var(--text-muted)]">Customer-side contacts for this fleet.</p>
         {canEdit&&<button onClick={()=>onSave("contacts",{contact_type:"fleet",role_title:"",name:"",sort_order:fleet.length})} className="flex items-center gap-1 text-xs text-blue-400"><Plus className="w-3.5 h-3.5"/> Add</button>}
       </div>
         <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl overflow-hidden"><table className="w-full text-sm"><thead><tr className="bg-blue-500/20/50">
@@ -264,24 +282,37 @@ function ContactsTab({ data, canEdit, onSave }) {
   );
 }
 
+function SolutionNotesInput({value,onSave,disabled}) {
+  const [local,setLocal] = useState(value||"");
+  const timer = useRef(null);
+  const prevValue = useRef(value||"");
+  useEffect(()=>{if((value||"")!==prevValue.current){prevValue.current=value||"";setLocal(value||"");}},[value]);
+  const handleChange = e => {
+    const v = e.target.value;
+    setLocal(v);
+    if(timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(()=>{prevValue.current=v;onSave(v);}, 800);
+  };
+  useEffect(()=>()=>{if(timer.current) clearTimeout(timer.current)},[]);
+  return <input className="bg-transparent border-none text-[var(--text-secondary)] text-sm w-full focus:outline-none" value={local} onChange={handleChange} disabled={disabled} placeholder="—"/>;
+}
+
 function SolutionTab({ data, canEdit, onSave }) {
   const toggle=(f,k)=>onSave("features",{...f,[k]:f[k]?0:1});
-  const debouncedSave = useDebouncedCallback(onSave, 800);
   const Chk=({val,c="blue"})=>(<div className={`w-5 h-5 rounded border mx-auto flex items-center justify-center ${val?`bg-${c}-600 border-${c}-500`:"bg-[var(--bg)] border-[var(--border)]"}`}>{val?<Check className="w-3 h-3 text-[var(--text)]"/>:null}</div>);
   return (
     <div>
       <div className="bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/20 rounded-xl p-4 mb-6"><p className="text-xs text-blue-300">↑ Platform: <strong>{data.overview?.ps_platform||"—"}</strong> (linked from Overview)</p></div>
       <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl overflow-hidden"><table className="w-full text-sm"><thead><tr className="bg-blue-500/20/50">
-        {["Feature","Needed","Licenses","Quote","Pilot","Prod","Notes"].map(h=><th key={h} className={`px-4 py-3 text-xs text-[var(--text-secondary)] font-semibold ${h==="Feature"||h==="Notes"?"text-left":"text-center"} ${h!=="Feature"&&h!=="Notes"?"w-20":""}`}>{h}</th>)}
+        {["Feature","Needed","Quote","Pilot","Production","Notes"].map(h=><th key={h} className={`px-4 py-3 text-xs text-[var(--text-secondary)] font-semibold ${h==="Feature"||h==="Notes"?"text-left":"text-center"} ${h!=="Feature"&&h!=="Notes"?"w-20":""}`}>{h}</th>)}
       </tr></thead><tbody>{data.features.map(f=>(
         <tr key={f.id} className="border-t border-[var(--border)]/50 hover:bg-[var(--bg-card)]">
           <td className="px-4 py-2 font-medium text-[var(--text)]">{f.feature_name}</td>
           <td className="px-4 py-2 text-center cursor-pointer" onClick={()=>canEdit&&toggle(f,"needed")}><Chk val={f.needed}/></td>
-          <td className="px-4 py-2 text-center"><input type="number" className="w-14 bg-transparent border-none text-center text-[var(--text-secondary)] text-sm focus:outline-none" value={f.num_licenses??""} onChange={e=>debouncedSave("features",{...f,num_licenses:e.target.value?parseInt(e.target.value):null})} disabled={!canEdit}/></td>
           <td className="px-4 py-2 text-center cursor-pointer" onClick={()=>canEdit&&toggle(f,"required_for_quote")}><Chk val={f.required_for_quote} c="emerald"/></td>
           <td className="px-4 py-2 text-center cursor-pointer" onClick={()=>canEdit&&toggle(f,"required_for_pilot")}><Chk val={f.required_for_pilot} c="emerald"/></td>
           <td className="px-4 py-2 text-center cursor-pointer" onClick={()=>canEdit&&toggle(f,"required_for_production")}><Chk val={f.required_for_production} c="emerald"/></td>
-          <td className="px-4 py-2"><input className="bg-transparent border-none text-[var(--text-secondary)] text-sm w-full focus:outline-none" value={f.notes||""} onChange={e=>debouncedSave("features",{...f,notes:e.target.value})} disabled={!canEdit} placeholder="—"/></td>
+          <td className="px-4 py-2"><SolutionNotesInput value={f.notes} onSave={v=>onSave("features",{...f,notes:v})} disabled={!canEdit}/></td>
         </tr>))}</tbody></table></div>
     </div>
   );
@@ -306,10 +337,10 @@ function GapsTab({ data, canEdit, onSave }) {
             <div className="grid grid-cols-2 gap-4">
               <Field label="Gap Identified" value={g.gap_identified} onChange={v=>debouncedSave("gaps",{...g,gap_identified:v})} disabled={!canEdit} wide/>
               <Field label="Use Case" value={g.use_case} onChange={v=>debouncedSave("gaps",{...g,use_case:v})} disabled={!canEdit} type="textarea" wide/>
-              <Field label="BD Team Engaged" value={g.bd_team_engaged} onChange={v=>onSave("gaps",{...g,bd_team_engaged:v})} disabled={!canEdit} type="checkbox"/>
+              <Field label="Business Development Team Engaged" value={g.bd_team_engaged} onChange={v=>onSave("gaps",{...g,bd_team_engaged:v})} disabled={!canEdit} type="checkbox"/>
               <Field label="Product Team Engaged" value={g.product_team_engaged} onChange={v=>onSave("gaps",{...g,product_team_engaged:v})} disabled={!canEdit} type="checkbox"/>
               <Field label="Customer Blocker" value={g.customer_blocker} onChange={v=>onSave("gaps",{...g,customer_blocker:v})} disabled={!canEdit} type="checkbox"/>
-              <Field label="PSOP Ticket" value={g.psop_ticket} onChange={v=>debouncedSave("gaps",{...g,psop_ticket:v})} disabled={!canEdit}/>
+              <Field label="PSOP Ticket" value={g.psop_ticket} onChange={v=>debouncedSave("gaps",{...g,psop_ticket:v})} disabled={!canEdit} hint="Platform Science Operations ticket reference"/>
             </div>
           </div>))}
       </div>
@@ -327,10 +358,9 @@ function MarketplaceTab({ data, canEdit, onSave }) {
   const filteredCatalog = catSearch ? catalog.filter(p => p.product_name?.toLowerCase().includes(catSearch.toLowerCase()) || p.partner_category?.toLowerCase().includes(catSearch.toLowerCase())) : catalog;
   return (
     <div className="space-y-8">
-      <CrossTabBanner links={[{field:"App validation (VLOOKUP)",source:"Marketplace SF Lookup!A:A"},{field:"Auto-fill details",source:"FILTER(Marketplace SF Lookup!A:I, ...)"},{field:"Fleet banner",source:"Overview!C1"}]}/>
       <div><div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Marketplace Apps ({data.marketplace_apps.length})</h3>
-        {canEdit && <button onClick={openCatalog} className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 px-3 py-2 rounded-lg border border-emerald-500/20"><Plus className="w-3.5 h-3.5"/> Add from SF Catalog</button>}
+        {canEdit && <button onClick={openCatalog} className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 px-3 py-2 rounded-lg border border-emerald-500/20"><Plus className="w-3.5 h-3.5"/> Add from Catalog</button>}
       </div>
         <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl overflow-auto"><table className="w-full text-sm"><thead><tr className="bg-blue-500/20/50">
           <th className="text-left px-4 py-3 text-xs text-[var(--text-secondary)] font-semibold w-12">Valid</th>
@@ -348,9 +378,8 @@ function MarketplaceTab({ data, canEdit, onSave }) {
               {canEdit&&<td className="px-2"><button onClick={()=>onSave("marketplace",{id:a.id},"delete")} className="p-1 hover:bg-red-500/10 rounded text-red-400"><Trash2 className="w-3.5 h-3.5"/></button></td>}
             </tr>))}
         </tbody></table></div>
-        <p className="text-[10px] text-cyan-400/60 font-mono mt-2">Valid = VLOOKUP(name, Marketplace SF Lookup!$A:$A, 1, FALSE)</p>
       </div>
-      {showCatalog && <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={()=>setShowCatalog(false)}>
+      {showCatalog && <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={()=>setShowCatalog(false)} onKeyDown={e=>{if(e.key==="Escape")setShowCatalog(false)}}>
         <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-2xl w-full max-w-3xl max-h-[80vh] overflow-hidden" onClick={e=>e.stopPropagation()}>
           <div className="p-4 border-b border-[var(--border)] flex items-center justify-between">
             <h3 className="text-sm font-semibold text-[var(--text)]">Select from SF Catalog ({catalog.length})</h3>
@@ -367,8 +396,11 @@ function MarketplaceTab({ data, canEdit, onSave }) {
         </div>
       </div>}
       <div><div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider">User Provided Apps ({data.upas.length})</h3>
-        {canEdit&&<button onClick={()=>onSave("upas",{name:"New App",sort_order:data.upas.length})} className="flex items-center gap-1 text-xs text-blue-400"><Plus className="w-3.5 h-3.5"/> Add UPA</button>}
+        <div>
+          <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider">User Provided Apps ({data.upas.length})</h3>
+          <p className="text-xs text-[var(--text-muted)] mt-0.5">Custom apps not in the marketplace catalog</p>
+        </div>
+        {canEdit&&<button onClick={()=>onSave("upas",{name:"New App",sort_order:data.upas.length})} className="flex items-center gap-1 text-xs text-blue-400"><Plus className="w-3.5 h-3.5"/> Add App</button>}
       </div>
         <div className="space-y-3">
           {data.upas.map(u=>(
@@ -377,11 +409,11 @@ function MarketplaceTab({ data, canEdit, onSave }) {
                 <Field label="Name" value={u.name} onChange={v=>debouncedSave("upas",{...u,name:v})} disabled={!canEdit}/>
                 <Field label="Website URL" value={u.website_url} onChange={v=>debouncedSave("upas",{...u,website_url:v})} disabled={!canEdit}/>
                 <Field label="Use Case" value={u.use_case} onChange={v=>debouncedSave("upas",{...u,use_case:v})} disabled={!canEdit} wide/>
-                <Field label="Deeplink" value={u.has_deeplink} onChange={v=>onSave("upas",{...u,has_deeplink:v})} disabled={!canEdit} type="checkbox"/>
+                <Field label="Has Deep Link" value={u.has_deeplink} onChange={v=>onSave("upas",{...u,has_deeplink:v})} disabled={!canEdit} type="checkbox" hint="Can open directly from the platform"/>
                 {canEdit&&<div className="flex justify-end col-span-2"><button onClick={()=>onSave("upas",{id:u.id},"delete")} className="text-xs text-red-400 flex items-center gap-1"><Trash2 className="w-3 h-3"/> Remove</button></div>}
               </div>
             </div>))}
-          {data.upas.length===0&&<div className="text-center py-8 text-[var(--text-muted)] text-sm">No UPAs</div>}
+          {data.upas.length===0&&<div className="text-center py-8 text-[var(--text-muted)] text-sm">No custom apps added yet</div>}
         </div>
       </div>
     </div>
@@ -389,13 +421,27 @@ function MarketplaceTab({ data, canEdit, onSave }) {
 }
 
 
+function InstallNumInput({value,onSave,disabled}) {
+  const [local,setLocal] = useState(String(value||0));
+  const timer = useRef(null);
+  const prevValue = useRef(value);
+  useEffect(()=>{if(value!==prevValue.current){prevValue.current=value;setLocal(String(value||0));}},[value]);
+  const handleChange = e => {
+    const v = e.target.value.replace(/\D/g,"");
+    setLocal(v);
+    if(timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(()=>{const n=parseInt(v)||0;prevValue.current=n;onSave(n);}, 800);
+  };
+  useEffect(()=>()=>{if(timer.current) clearTimeout(timer.current)},[]);
+  return <input type="text" inputMode="numeric" className="w-12 bg-transparent text-center text-[var(--text)] text-sm focus:outline-none border-none" value={local} onChange={handleChange} disabled={disabled}/>;
+}
+
 function InstallTab({ data, canEdit, onSave }) {
-  const debouncedSave = useDebouncedCallback(onSave, 800);
   const M=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const byY={};data.forecasts.forEach(f=>{if(!byY[f.year])byY[f.year]=[];byY[f.year].push(f);});
   return (
     <div className="space-y-8">
-      <div className="bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/20 rounded-xl p-4"><p className="text-xs text-blue-300">↑ Fleet: <strong>{data.fleet_name}</strong> (linked from Overview)</p></div>
+      <p className="text-sm text-[var(--text-muted)]">Monthly install forecasts vs actuals for <strong className="text-[var(--text)]">{data.fleet_name}</strong></p>
       {Object.entries(byY).sort(([a],[b])=>+a-+b).map(([yr,fs])=>{
         const s=fs.sort((a,b)=>a.month-b.month);
         return(<div key={yr}><h3 className="text-lg font-bold mb-3">{yr}</h3>
@@ -405,11 +451,11 @@ function InstallTab({ data, canEdit, onSave }) {
             <th className="px-3 py-3 text-center text-xs text-[var(--text-secondary)] font-semibold bg-blue-500/10">Total</th>
           </tr></thead><tbody>
             <tr className="border-t border-[var(--border)]/50"><td className="px-3 py-2 text-amber-400 font-medium text-xs">Forecast</td>
-              {s.map(f=><td key={f.month} className="px-1 py-2 text-center"><input type="number" className="w-12 bg-transparent text-center text-[var(--text)] text-sm focus:outline-none border-none" value={f.forecasted||0} onChange={e=>debouncedSave("forecasts",{...f,forecasted:parseInt(e.target.value)||0})} disabled={!canEdit}/></td>)}
+              {s.map(f=><td key={f.month} className="px-1 py-2 text-center"><InstallNumInput value={f.forecasted} onSave={v=>onSave("forecasts",{...f,forecasted:v})} disabled={!canEdit}/></td>)}
               <td className="px-3 py-2 text-center font-bold text-amber-400 bg-blue-500/5">{s.reduce((a,f)=>a+(f.forecasted||0),0)}</td>
             </tr>
             <tr className="border-t border-[var(--border)]/50"><td className="px-3 py-2 text-emerald-400 font-medium text-xs">Actual</td>
-              {s.map(f=><td key={f.month} className="px-1 py-2 text-center"><input type="number" className="w-12 bg-transparent text-center text-[var(--text)] text-sm focus:outline-none border-none" value={f.actual||0} onChange={e=>debouncedSave("forecasts",{...f,actual:parseInt(e.target.value)||0})} disabled={!canEdit}/></td>)}
+              {s.map(f=><td key={f.month} className="px-1 py-2 text-center"><InstallNumInput value={f.actual} onSave={v=>onSave("forecasts",{...f,actual:v})} disabled={!canEdit}/></td>)}
               <td className="px-3 py-2 text-center font-bold text-emerald-400 bg-blue-500/5">{s.reduce((a,f)=>a+(f.actual||0),0)}</td>
             </tr>
           </tbody></table></div></div>);
@@ -427,31 +473,26 @@ function StatsTab({ data }) {
     : "No fleet data yet.";
 
   const items=[
-    {l:"Marketplace Apps",v:data.stats.marketplace_apps,c:"text-blue-400",src:"COUNTA(Marketplace!A16:A140)"},
-    {l:"User Provided Apps",v:data.stats.upas,c:"text-cyan-400",src:"COUNTA(Marketplace!A3:A12)"},
-    {l:"Forms",v:data.stats.forms,c:"text-emerald-400",src:"COUNTA(Forms!B2:B200)"},
-    {l:"Gaps Identified",v:data.stats.gaps,c:"text-amber-400",src:"COUNTA(Gaps!A2:A200)"},
-    {l:"Features Needed",v:data.stats.features_needed,c:"text-violet-400",src:"COUNTIF(Solution Mix)"},
+    {l:"Marketplace Apps",v:data.stats.marketplace_apps,c:"text-blue-400"},
+    {l:"User Provided Apps",v:data.stats.upas,c:"text-cyan-400"},
+    {l:"Forms",v:data.stats.forms,c:"text-emerald-400"},
+    {l:"Gaps Identified",v:data.stats.gaps,c:"text-amber-400"},
+    {l:"Features Needed",v:data.stats.features_needed,c:"text-violet-400"},
   ];
   const formCats = data.stats.form_categories || {};
   const catLabels = ["All","Fleet Type","Customer/Consignee","Shipper","Terminal","Border Crossing","Other"];
   return (
     <div className="space-y-6">
-      {/* Stats!E2 — fleet summary sentence */}
       <div className="bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/20 rounded-xl p-4">
         <p className="text-sm text-blue-200">{fleetSummary}</p>
-        <p className="text-[10px] text-cyan-400/60 font-mono mt-2">Stats!E2 = CONCATENATE(Overview!B2, Overview!B3, Contacts exec sponsor)</p>
       </div>
-      {/* Stats!B2-B4 — aggregate counts */}
       <div className="grid grid-cols-3 lg:grid-cols-5 gap-4">{items.map(s=>(
         <div key={s.l} className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-6">
           <div className={`text-4xl font-bold mb-2 ${s.c}`}>{s.v}</div>
           <div className="text-sm text-[var(--text-muted)]">{s.l}</div>
-          <div className="text-[10px] text-[var(--text-muted)] mt-1 font-mono">{s.src}</div>
         </div>))}</div>
-      {/* Stats!B6-B12 — form category COUNTIF */}
       <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-5">
-        <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-4">Form Category Breakdown (COUNTIF)</h3>
+        <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-4">Form Category Breakdown</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {catLabels.map(cat => (
             <div key={cat} className="flex justify-between py-2 px-3 border border-[var(--border)]/30 rounded-lg">
@@ -460,7 +501,6 @@ function StatsTab({ data }) {
             </div>
           ))}
         </div>
-        <p className="text-[10px] text-cyan-400/60 font-mono mt-2">Stats!B6:B12 = COUNTIF(Forms!$G:$G, category)</p>
       </div>
     </div>
   );
@@ -536,34 +576,31 @@ function SummaryTab({ data, onNavigate }) {
   }
   const fleetSentence = summaryParts.length > 0 ? summaryParts.join(". ") + "." : "";
   const tabs = [
-    {id:"overview",label:"Overview (AE)",desc:"Fleet profile, TMS, technology, links",fields:"Fleet name, location, size, TSP, TMS, platform",icon:Building2},
-    {id:"contacts",label:"Contacts (AE,PMO)",desc:"PS team and fleet contacts",fields:"Pulls AE name from Overview",icon:Phone},
-    {id:"marketplace",label:"Marketplace & UPAs",desc:"Apps and user-provided applications",fields:"Validates against Marketplace SF Lookup",icon:ShoppingBag},
-    {id:"solution",label:"Solution Mix (AE,SE)",desc:"Features + 3rd party integrations + UPAs",fields:"Pulls TSP, TMS, all tech fields from Overview; UPAs from Marketplace tab",icon:Puzzle},
-    {id:"gaps",label:"Gaps (AE,SE)",desc:"Pain points and blockers",fields:"Fleet banner from Overview",icon:AlertTriangle},
-    {id:"workshop",label:"Presale Workshop (SE)",desc:"Discovery questions and responses",fields:"Fleet name interpolated into question text from Overview",icon:MessageSquare},
-    {id:"workflow",label:"PS WFIntegration (IMP)",desc:"Workflow integration details",fields:"60+ fields linked from Overview + form counts from Stats",icon:Workflow},
-    {id:"install",label:"Install Strategy (IMP)",desc:"Monthly install forecasts",fields:"Fleet name from Overview in row labels",icon:Calendar},
-    {id:"sf_lookup",label:"Marketplace SF Lookup",desc:"Salesforce product catalog (113 products)",fields:"VLOOKUP source for Marketplace & UPAs app validation",icon:ShoppingBag},
-    {id:"km_lookup",label:"KM Marketplace Lookup",desc:"Knowledge Management app catalog (132 apps)",fields:"App descriptions and categories for marketplace selections",icon:ShoppingBag},
-    {id:"master_data",label:"MasterData",desc:"Global reference data for dropdowns",fields:"Company types, operation types, TMS providers, workflow integrators",icon:Database},
-    {id:"training",label:"Training (TAM)",desc:"Training assessment Q&A",fields:"Fleet name interpolated from Overview",icon:GraduationCap},
-    {id:"stats",label:"Stats",desc:"Auto-computed aggregations",fields:"COUNTA from Marketplace, UPAs, Forms tabs",icon:BarChart3},
+    {id:"overview",label:"Overview",desc:"Fleet profile, TMS, technology, links",icon:Building2},
+    {id:"contacts",label:"Contacts",desc:"PS team and fleet contacts",icon:Phone},
+    {id:"marketplace",label:"Marketplace & UPAs",desc:"Apps and user-provided applications",icon:ShoppingBag},
+    {id:"solution",label:"Solution Mix",desc:"Features and 3rd party integrations",icon:Puzzle},
+    {id:"gaps",label:"Gaps",desc:"Pain points and blockers",icon:AlertTriangle},
+    {id:"workshop",label:"Presale Workshop",desc:"Discovery questions and responses",icon:MessageSquare},
+    {id:"workflow",label:"Workflow Integration",desc:"Workflow integration details",icon:Workflow},
+    {id:"install",label:"Install Strategy",desc:"Monthly install forecasts",icon:Calendar},
+    {id:"sf_lookup",label:"Marketplace SF Lookup",desc:"Salesforce product catalog",icon:ShoppingBag},
+    {id:"km_lookup",label:"KM Marketplace Lookup",desc:"Knowledge Management app catalog",icon:ShoppingBag},
+    {id:"master_data",label:"Master Data",desc:"Global reference data for dropdowns",icon:Database},
+    {id:"training",label:"Training",desc:"Training assessment Q&A",icon:GraduationCap},
+    {id:"stats",label:"Stats",desc:"Auto-computed aggregations",icon:BarChart3},
   ];
   return (
     <div className="space-y-8">
       <FleetSummary data={data}/>
-      {/* START HERE!B3 — fleet summary sentence from Overview + Contacts */}
       {fleetSentence && (
         <div className="bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/20 rounded-xl p-4">
           <p className="text-sm text-blue-200">{fleetSentence}</p>
-          <p className="text-[10px] text-cyan-400/60 font-mono mt-2">START HERE!B3 = CONCATENATE(Overview!B2, Overview!B3, Contacts exec sponsor)</p>
         </div>
       )}
       <div>
         <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Platform</h3>
         <p className="text-lg font-bold text-[var(--text)]">{ov.ps_platform || "—"}</p>
-        <p className="text-[10px] text-cyan-400/60 font-mono mt-1">START HERE!B5 = Overview!B5</p>
       </div>
       <div>
         <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">Tab Navigation & Data Flow</h3>
@@ -577,9 +614,8 @@ function SummaryTab({ data, onNavigate }) {
                     <span className="font-semibold text-[var(--text)] text-sm">{t.label}</span>
                     <span className="text-xs text-[var(--text-muted)]">— {t.desc}</span>
                   </div>
-                  <p className="text-xs text-cyan-400/60 font-mono mt-1">Linked: {t.fields}</p>
                 </div>
-                <ArrowLeft className="w-4 h-4 text-[#2a3a55] group-hover:text-blue-400 transition rotate-180"/>
+                <ChevronRight className="w-4 h-4 text-[#2a3a55] group-hover:text-blue-400 transition"/>
               </div>
             </button>
           );})}
@@ -597,17 +633,15 @@ function SummaryTab({ data, onNavigate }) {
             </tr></thead>
             <tbody>
               {[
-                {tab:"Overview",R:"AE",A:"AE",C:"CUST",I:"SE, SAE, PMO, IMP"},
-                {tab:"Contacts",R:"AE, PMO",A:"AE",C:"CUST",I:"SE, CSM, FE, SAE"},
-                {tab:"Marketplace",R:"AE, SE, IMP",A:"IMP",C:"CUST, MKT",I:"PMO, SUP, TSA"},
-                {tab:"Solution Mix",R:"AE, SE",A:"SE",C:"CUST",I:"SAE, PMO, IMP"},
-                {tab:"Gaps",R:"AE, SE",A:"SE",C:"CUST",I:"SAE, PMO, IMP"},
-                {tab:"Workshop",R:"SE, INT",A:"SE",C:"CUST",I:"AE, IMP, PMO"},
-                {tab:"Forms",R:"SE, IMP",A:"SE",C:"CUST",I:"AE, PMO, INT"},
-                {tab:"WF/Integration",R:"IMP, INT",A:"IMP",C:"CUST",I:"PMO, SUP, SAE"},
-                {tab:"Install Strategy",R:"IMP, PMO, FE",A:"PMO",C:"CUST",I:"AE, SE, SUP"},
-                {tab:"PS+ FORMS",R:"IMP",A:"IMP",C:"CUST",I:"PMO, TSA, INT"},
-                {tab:"PSE FORMS",R:"IMP, SAE",A:"IMP",C:"CUST",I:"PMO, TSA"},
+                {tab:"Overview",R:"AE",A:"AE",C:"Customer",I:"SE, SAE, PMO, IMP"},
+                {tab:"Contacts",R:"AE, PMO",A:"AE",C:"Customer",I:"SE, CSM, FE, SAE"},
+                {tab:"Marketplace",R:"AE, SE, IMP",A:"IMP",C:"Customer, MKT",I:"PMO, SUP, TSA"},
+                {tab:"Solution Mix",R:"AE, SE",A:"SE",C:"Customer",I:"SAE, PMO, IMP"},
+                {tab:"Gaps",R:"AE, SE",A:"SE",C:"Customer",I:"SAE, PMO, IMP"},
+                {tab:"Workshop",R:"SE, INT",A:"SE",C:"Customer",I:"AE, IMP, PMO"},
+                {tab:"Forms",R:"SE, IMP",A:"SE",C:"Customer",I:"AE, PMO, INT"},
+                {tab:"WF/Integration",R:"IMP, INT",A:"IMP",C:"Customer",I:"PMO, SUP, SAE"},
+                {tab:"Install Strategy",R:"IMP, PMO, FE",A:"PMO",C:"Customer",I:"AE, SE, SUP"},
                 {tab:"SF Lookup",R:"MKT",A:"MKT",C:"MKT",I:"AE, SE, SAE"},
                 {tab:"Training",R:"TAM, PMO",A:"TAM",C:"MKT, AE",I:"SAE, IMP, CSM"},
               ].map(r=>(
@@ -626,13 +660,12 @@ function SummaryTab({ data, onNavigate }) {
       <div>
         <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">Role Definitions</h3>
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
-          {[{id:"AE",n:"Account Executive",s:"1-4"},{id:"SE",n:"Solutions Engineer",s:"1-2"},{id:"SAE",n:"Solutions Architect",s:"2"},{id:"PMO",n:"Program Management",s:"2-4"},{id:"INT",n:"Integrations",s:"2-3"},{id:"IMP",n:"Implementer",s:"3"},{id:"CSM",n:"Customer Success",s:"3-4"},{id:"MKT",n:"Marketplace",s:"2-3"},{id:"FE",n:"Field Engineer",s:"3-4"},{id:"AM",n:"Account Manager",s:"4"},{id:"TAM",n:"Training Acct Mgr",s:"3-4"},{id:"TSA",n:"Tech Solution Arch",s:"4"},{id:"SUP",n:"Support",s:"4"},{id:"CUST",n:"Customer",s:"1-4"}].map(r=>(
+          {[{id:"AE",n:"Account Executive"},{id:"SE",n:"Solutions Engineer"},{id:"SAE",n:"Solutions Architect"},{id:"PMO",n:"Program Management"},{id:"INT",n:"Integrations"},{id:"IMP",n:"Implementer"},{id:"CSM",n:"Customer Success Manager"},{id:"MKT",n:"Marketplace"},{id:"FE",n:"Field Engineer"},{id:"AM",n:"Account Manager"},{id:"TAM",n:"Training Account Manager"},{id:"TSA",n:"Tech Solution Architect"},{id:"SUP",n:"Support"},{id:"Customer",n:"Customer"}].map(r=>(
             <div key={r.id} className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg p-3">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded">{r.id}</span>
                 <span className="text-xs text-[var(--text)] font-medium">{r.n}</span>
               </div>
-              <p className="text-[10px] text-[var(--text-muted)] mt-1">Stages: {r.s}</p>
             </div>
           ))}
         </div>
@@ -658,6 +691,7 @@ export default function ScopePage() {
   const [err,setErr] = useState("");
   const [expandedGroups, setExpandedGroups] = useState({});
 
+  const { toast } = useToast();
   const canEdit = data?.role==="owner"||data?.role==="editor";
   const [refData, setRefData] = useState({});
 
@@ -682,7 +716,7 @@ export default function ScopePage() {
     const r=await fetch(`/api/scopes/${scopeId}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({section,data:d,action})});
     setSaving(false);
     if(r.ok){setSaved(true);setTimeout(()=>setSaved(false),2000);await load();}
-    else{const e=await r.json().catch(()=>({}));setSaveErr(e.error||"Save failed");setTimeout(()=>setSaveErr(""),5000);}
+    else{const e=await r.json().catch(()=>({}));const msg=e.error||"Save failed";setSaveErr(msg);toast(msg,"error");setTimeout(()=>setSaveErr(""),5000);}
     return r.ok;
   };
 
@@ -735,12 +769,13 @@ export default function ScopePage() {
         <div className="sticky top-0 z-40 bg-[var(--bg)]/90 backdrop-blur-sm border-b border-[var(--border)] px-8 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h1 className="font-bold text-lg">{TABS.find(t=>t.id===tab)?.label || TABS.flatMap(t=>t.children||[]).find(c=>c.id===tab)?.label}</h1>
-            {saving&&<span className="text-xs text-amber-400 animate-pulse">Saving…</span>}
-            {saved&&<span className="text-xs text-emerald-400 flex items-center gap-1"><Check className="w-3 h-3"/> Saved</span>}
+            {saving&&<span className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded animate-pulse">Saving…</span>}
+            {saved&&<span className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded flex items-center gap-1"><Check className="w-3 h-3"/> Saved</span>}
             {saveErr&&<span className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded">{saveErr}</span>}
+            {!saving&&!saved&&!saveErr&&canEdit&&<span className="text-[10px] text-[var(--text-muted)]">Changes save automatically</span>}
           </div>
           <div className="flex items-center gap-3">
-            {!canEdit&&<span className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full">Read Only</span>}
+            {!canEdit&&<span className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full" title="Contact the document owner for edit access">Read Only — contact owner for edit access</span>}
             <ThemeToggle />
             <a href={`/api/scopes/${scopeId}/export`} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-600/30 transition-colors"><Download className="w-3.5 h-3.5"/> Export Excel</a>
           </div>

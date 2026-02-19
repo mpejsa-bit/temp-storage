@@ -18,6 +18,14 @@ export function ThemeToggle() {
 
   useEffect(() => setMounted(true), []);
 
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [open]);
+
   if (!mounted) return <div className="w-8 h-8" />;
 
   const current = THEMES.find(t => t.id === theme) || THEMES[2];
@@ -29,6 +37,7 @@ export function ThemeToggle() {
         onClick={() => setOpen(!open)}
         className="p-1.5 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-secondary)] transition-colors"
         title={`Theme: ${current.label}`}
+        aria-label={`Current theme: ${current.label}. Click to change.`}
       >
         <Icon className={`w-4 h-4 ${current.iconColor}`} />
       </button>
