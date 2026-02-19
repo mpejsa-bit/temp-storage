@@ -14,6 +14,7 @@ import TrainingTabComp from "@/components/scope/TrainingTab";
 import FormsTabComp from "@/components/scope/FormsTab";
 import MasterDataTab from "@/components/scope/MasterDataTab";
 import CityAutocomplete from "@/components/scope/CityAutocomplete";
+import CompletionBar, { CompletionDot } from "@/components/scope/CompletionBar";
 
 function formatPhone(value) {
   const digits = (value||'').replace(/\D/g,'').slice(0,10);
@@ -66,11 +67,15 @@ const TABS = [
   { id: "sharing", label: "Sharing & Team", icon: Users },
 ];
 
-function Field({ label, value, onChange, disabled, type="text", options, placeholder, wide, hint }) {
-  const cls = "w-full px-3 py-2 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-[var(--text)] text-sm placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500 transition disabled:opacity-50";
+function Field({ label, value, onChange, disabled, type="text", options, placeholder, wide, hint, required: isRequired, missing: isMissing }) {
+  const baseCls = "w-full px-3 py-2 bg-[var(--bg-secondary)] border rounded-lg text-[var(--text)] text-sm placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500 transition disabled:opacity-50";
+  const borderCls = isMissing ? "border-amber-500/60" : "border-[var(--border)]";
+  const cls = `${baseCls} ${borderCls}`;
   return (
     <div className={wide?"col-span-2":""}>
-      <label className="block text-xs font-medium text-[var(--text-muted)] mb-1.5 uppercase tracking-wider">{label}</label>
+      <label className="block text-xs font-medium text-[var(--text-muted)] mb-1.5 uppercase tracking-wider">
+        {label}{isRequired && <span className="text-amber-400 ml-1">*</span>}
+      </label>
       {hint && <p className="text-[10px] text-[var(--text-muted)] mb-1">{hint}</p>}
       {type==="select"&&options ? <select value={value||""} onChange={e=>onChange(e.target.value)} disabled={disabled} className={cls}><option value="">— Select —</option>{options.map(o=><option key={o} value={o}>{o}</option>)}</select>
       : type==="textarea" ? <textarea value={value||""} onChange={e=>onChange(e.target.value)} disabled={disabled} rows={3} className={cls} placeholder={placeholder}/>
@@ -94,7 +99,10 @@ function UrlField({ label, value, onChange, disabled, placeholder }) {
   );
 }
 
-function OverviewTab({ data, canEdit, onSave, refData }) {
+function OverviewTab({ data, canEdit, onSave, refData, requiredFields=[], missingFields=[] }) {
+  const reqSet = new Set(requiredFields);
+  const missSet = new Set(missingFields);
+  const fp = (key) => ({ required: reqSet.has(key), missing: missSet.has(key) });
   const today = new Date().toLocaleDateString("en-US",{month:"2-digit",day:"2-digit",year:"numeric"});
   const initOv = (o) => ({...o, date_lead_provided: o?.date_lead_provided || today});
   const [ov, setOv] = useState(initOv(data.overview||{}));
@@ -113,27 +121,27 @@ function OverviewTab({ data, canEdit, onSave, refData }) {
       </div>
       <section><h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">Fleet Profile</h3>
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Fleet Name" value={ov.fleet_name??data.fleet_name} onChange={v=>set("fleet_name",v)} disabled={!canEdit}/>
-          <CityAutocomplete label="HQ Location" value={ov.hq_location} onChange={v=>set("hq_location",v)} onCitySelect={(city)=>{set("hq_location",`${city.city}, ${city.state}`);set("fleet_timezone",city.timezone);}} disabled={!canEdit} placeholder="City, ST (US only)"/>
-          <Field label="PS Platform" value={ov.ps_platform} onChange={v=>set("ps_platform",v)} disabled={!canEdit} type="select" options={ref("ps_platform",["PS Enterprise","PS+"])} hint="Platform Science product line"/>
-          <Field label="Fleet Timezone" value={ov.fleet_timezone} onChange={v=>set("fleet_timezone",v)} disabled={!canEdit} type="select" options={ref("fleet_timezone",["Eastern","Central","Mountain","Pacific","Alaska","Hawaii"])} hint="Auto-set when selecting a US city"/>
-          <Field label="Current Technology" value={ov.current_technology} onChange={v=>set("current_technology",v)} disabled={!canEdit} type="select" options={ref("current_technology",["Pre-Mobility","Mobility"])}/>
-          <Field label="Fleet Persona" value={ov.fleet_persona} onChange={v=>set("fleet_persona",v)} disabled={!canEdit} type="select" options={ref("fleet_persona",["Innovator","Early Adopter","Early Majority","Late Majority","Influencer"])} hint="Technology adoption profile"/>
-          <Field label="Type of Company" value={ov.type_of_company} onChange={v=>set("type_of_company",v)} disabled={!canEdit} type="select" options={ref("company_type",["Private Fleet/Shipper","Brokerage/3PL","Maintenance Service Center","Fuel/Energy","Autohauler"])}/>
-          <Field label="Type of Operation" value={ov.type_of_operation} onChange={v=>set("type_of_operation",v)} disabled={!canEdit} type="select" options={ref("operation_type",["General Freight","Reefer","LTL","Retail/Wholesale","Bulk/Petrol/Chem/Tanker","Intermodal"])}/>
+          <Field label="Fleet Name" value={ov.fleet_name??data.fleet_name} onChange={v=>set("fleet_name",v)} disabled={!canEdit} {...fp("fleet_name")}/>
+          <CityAutocomplete label="HQ Location" value={ov.hq_location} onChange={v=>set("hq_location",v)} onCitySelect={(city)=>{set("hq_location",`${city.city}, ${city.state}`);set("fleet_timezone",city.timezone);}} disabled={!canEdit} placeholder="City, ST (US only)" required={reqSet.has("hq_location")} missing={missSet.has("hq_location")}/>
+          <Field label="PS Platform" value={ov.ps_platform} onChange={v=>set("ps_platform",v)} disabled={!canEdit} type="select" options={ref("ps_platform",["PS Enterprise","PS+"])} hint="Platform Science product line" {...fp("ps_platform")}/>
+          <Field label="Fleet Timezone" value={ov.fleet_timezone} onChange={v=>set("fleet_timezone",v)} disabled={!canEdit} type="select" options={ref("fleet_timezone",["Eastern","Central","Mountain","Pacific","Alaska","Hawaii"])} hint="Auto-set when selecting a US city" {...fp("fleet_timezone")}/>
+          <Field label="Current Technology" value={ov.current_technology} onChange={v=>set("current_technology",v)} disabled={!canEdit} type="select" options={ref("current_technology",["Pre-Mobility","Mobility"])} {...fp("current_technology")}/>
+          <Field label="Fleet Persona" value={ov.fleet_persona} onChange={v=>set("fleet_persona",v)} disabled={!canEdit} type="select" options={ref("fleet_persona",["Innovator","Early Adopter","Early Majority","Late Majority","Influencer"])} hint="Technology adoption profile" {...fp("fleet_persona")}/>
+          <Field label="Type of Company" value={ov.type_of_company} onChange={v=>set("type_of_company",v)} disabled={!canEdit} type="select" options={ref("company_type",["Private Fleet/Shipper","Brokerage/3PL","Maintenance Service Center","Fuel/Energy","Autohauler"])} {...fp("type_of_company")}/>
+          <Field label="Type of Operation" value={ov.type_of_operation} onChange={v=>set("type_of_operation",v)} disabled={!canEdit} type="select" options={ref("operation_type",["General Freight","Reefer","LTL","Retail/Wholesale","Bulk/Petrol/Chem/Tanker","Intermodal"])} {...fp("type_of_operation")}/>
         </div>
       </section>
       <section><h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">Fleet Size</h3>
         <div className="grid grid-cols-3 gap-4">
-          <Field label="# Drivers" value={ov.num_drivers} onChange={v=>set("num_drivers",v)} disabled={!canEdit} type="number"/>
-          <Field label="# Tractors" value={ov.num_tractors} onChange={v=>set("num_tractors",v)} disabled={!canEdit} type="number"/>
-          <Field label="# Trailers" value={ov.num_trailers} onChange={v=>set("num_trailers",v)} disabled={!canEdit} type="number"/>
+          <Field label="# Drivers" value={ov.num_drivers} onChange={v=>set("num_drivers",v)} disabled={!canEdit} type="number" {...fp("num_drivers")}/>
+          <Field label="# Tractors" value={ov.num_tractors} onChange={v=>set("num_tractors",v)} disabled={!canEdit} type="number" {...fp("num_tractors")}/>
+          <Field label="# Trailers" value={ov.num_trailers} onChange={v=>set("num_trailers",v)} disabled={!canEdit} type="number" {...fp("num_trailers")}/>
         </div>
       </section>
       <section><h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">TMS & Technology</h3>
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Current TSP" value={ov.current_tsp} onChange={v=>set("current_tsp",v)} disabled={!canEdit} placeholder="e.g. Omni"/>
-          <Field label="Current TMS" value={ov.current_tms} onChange={v=>set("current_tms",v)} disabled={!canEdit} type="select" options={ref("tms_provider",["ICC/Innovative","McLeod","TMW","Trimble","MercuryGate","Oracle","SAP","BluJay","Descartes","Other:"])}/>
+          <Field label="Current TSP" value={ov.current_tsp} onChange={v=>set("current_tsp",v)} disabled={!canEdit} placeholder="e.g. Omni" {...fp("current_tsp")}/>
+          <Field label="Current TMS" value={ov.current_tms} onChange={v=>set("current_tms",v)} disabled={!canEdit} type="select" options={ref("tms_provider",["ICC/Innovative","McLeod","TMW","Trimble","MercuryGate","Oracle","SAP","BluJay","Descartes","Other:"])} {...fp("current_tms")}/>
           <Field label="Current TMS Type" value={ov.current_tms_type} onChange={v=>set("current_tms_type",v)} disabled={!canEdit} type="select" options={ref("tms_type",["Cloud","Hosted","SaaS","On-Prem"])}/>
           <Field label="Current TMS Version" value={ov.current_tms_version} onChange={v=>set("current_tms_version",v)} disabled={!canEdit}/>
           <Field label="Future TMS" value={ov.future_tms} onChange={v=>set("future_tms",v)} disabled={!canEdit} type="select" options={ref("tms_provider",["ICC/Innovative","McLeod","TMW","Trimble","MercuryGate","Oracle","SAP","BluJay","Descartes","Other:"])}/>
@@ -142,7 +150,7 @@ function OverviewTab({ data, canEdit, onSave, refData }) {
       </section>
       <section><h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">Account & Links</h3>
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Account Executive" value={ov.account_executive} onChange={v=>set("account_executive",v)} disabled={!canEdit}/>
+          <Field label="Account Executive" value={ov.account_executive} onChange={v=>set("account_executive",v)} disabled={!canEdit} {...fp("account_executive")}/>
           <Field label="Date Lead Provided" value={ov.date_lead_provided} onChange={v=>set("date_lead_provided",v)} disabled={!canEdit} placeholder="MM/DD/YYYY"/>
           <UrlField label="Contract Link" value={ov.contract_link} onChange={v=>set("contract_link",v)} disabled={!canEdit}/>
           <UrlField label="SF Opportunity Link" value={ov.sf_opportunity_link} onChange={v=>set("sf_opportunity_link",v)} disabled={!canEdit}/>
@@ -318,29 +326,38 @@ function SolutionTab({ data, canEdit, onSave }) {
   );
 }
 
-function GapsTab({ data, canEdit, onSave }) {
+function GapsTab({ data, canEdit, onSave, requiredFields=[], missingFields=[] }) {
+  const [gaps, setGaps] = useState(data.gaps || []);
+  const prevJson = useRef(JSON.stringify(data.gaps||[]));
+  useEffect(()=>{const json=JSON.stringify(data.gaps||[]);if(json!==prevJson.current){prevJson.current=json;setGaps(data.gaps||[]);}},[data.gaps]);
   const debouncedSave = useDebouncedCallback(onSave, 800);
+  const upd = (id,field,val) => {
+    setGaps(prev=>{const next=prev.map(g=>g.id===id?{...g,[field]:val}:g);const row=next.find(g=>g.id===id);if(row) debouncedSave("gaps",row);return next;});
+  };
+  const reqSet = new Set(requiredFields);
+  const missSet = new Set(missingFields);
+  const fp = (key) => ({ required: reqSet.has(key), missing: missSet.has(key) });
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-[var(--text-muted)]">Gaps or pain points identified during alignment.</p>
-        {canEdit&&<button onClick={()=>onSave("gaps",{gap_number:data.gaps.length+1,sort_order:data.gaps.length})} className="flex items-center gap-1 text-xs text-blue-400"><Plus className="w-3.5 h-3.5"/> Add Gap</button>}
+        {canEdit&&<button onClick={()=>onSave("gaps",{gap_number:gaps.length+1,sort_order:gaps.length})} className="flex items-center gap-1 text-xs text-blue-400"><Plus className="w-3.5 h-3.5"/> Add Gap</button>}
       </div>
       <div className="space-y-4">
-        {data.gaps.length===0?<div className="text-center py-12 text-[var(--text-muted)]">No gaps yet</div>:
-        data.gaps.map((g,i)=>(
+        {gaps.length===0?<div className="text-center py-12 text-[var(--text-muted)]">No gaps yet</div>:
+        gaps.map((g,i)=>(
           <div key={g.id} className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-5">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-bold text-amber-400 bg-amber-500/10 px-2 py-1 rounded">Gap #{i+1}</span>
               {canEdit&&<button onClick={()=>onSave("gaps",{id:g.id},"delete")} className="text-red-400"><Trash2 className="w-4 h-4"/></button>}
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Gap Identified" value={g.gap_identified} onChange={v=>debouncedSave("gaps",{...g,gap_identified:v})} disabled={!canEdit} wide/>
-              <Field label="Use Case" value={g.use_case} onChange={v=>debouncedSave("gaps",{...g,use_case:v})} disabled={!canEdit} type="textarea" wide/>
-              <Field label="Business Development Team Engaged" value={g.bd_team_engaged} onChange={v=>onSave("gaps",{...g,bd_team_engaged:v})} disabled={!canEdit} type="checkbox"/>
-              <Field label="Product Team Engaged" value={g.product_team_engaged} onChange={v=>onSave("gaps",{...g,product_team_engaged:v})} disabled={!canEdit} type="checkbox"/>
-              <Field label="Customer Blocker" value={g.customer_blocker} onChange={v=>onSave("gaps",{...g,customer_blocker:v})} disabled={!canEdit} type="checkbox"/>
-              <Field label="PSOP Ticket" value={g.psop_ticket} onChange={v=>debouncedSave("gaps",{...g,psop_ticket:v})} disabled={!canEdit} hint="Platform Science Operations ticket reference"/>
+              <Field label="Gap Identified" value={g.gap_identified} onChange={v=>upd(g.id,"gap_identified",v)} disabled={!canEdit} wide {...fp("gap_identified")}/>
+              <Field label="Use Case" value={g.use_case} onChange={v=>upd(g.id,"use_case",v)} disabled={!canEdit} type="textarea" wide {...fp("use_case")}/>
+              <Field label="Business Development Team Engaged" value={g.bd_team_engaged} onChange={v=>upd(g.id,"bd_team_engaged",v)} disabled={!canEdit} type="checkbox"/>
+              <Field label="Product Team Engaged" value={g.product_team_engaged} onChange={v=>upd(g.id,"product_team_engaged",v)} disabled={!canEdit} type="checkbox"/>
+              <Field label="Customer Blocker" value={g.customer_blocker} onChange={v=>upd(g.id,"customer_blocker",v)} disabled={!canEdit} type="checkbox"/>
+              <Field label="PSOP Ticket" value={g.psop_ticket} onChange={v=>upd(g.id,"psop_ticket",v)} disabled={!canEdit} hint="Platform Science Operations ticket reference"/>
             </div>
           </div>))}
       </div>
@@ -353,6 +370,12 @@ function MarketplaceTab({ data, canEdit, onSave }) {
   const [showCatalog, setShowCatalog] = useState(false);
   const [catalog, setCatalog] = useState([]);
   const [catSearch, setCatSearch] = useState("");
+  const [upas, setUpas] = useState(data.upas || []);
+  const prevUpasJson = useRef(JSON.stringify(data.upas||[]));
+  useEffect(()=>{const json=JSON.stringify(data.upas||[]);if(json!==prevUpasJson.current){prevUpasJson.current=json;setUpas(data.upas||[]);}},[data.upas]);
+  const updUpa = (id,field,val) => {
+    setUpas(prev=>{const next=prev.map(u=>u.id===id?{...u,[field]:val}:u);const row=next.find(u=>u.id===id);if(row) debouncedSave("upas",row);return next;});
+  };
   const openCatalog = async () => { setShowCatalog(true); const r = await fetch("/api/ref?table=sf"); const d = await r.json(); setCatalog(d.data || []); };
   const addFromCatalog = async (p) => { await onSave("marketplace", { product_name:p.product_name, partner_account:p.partner_account, solution_type:p.solution_type, partner_category:p.partner_category, partner_subcategory:p.partner_subcategory, stage:p.stage, selected:1 }); setShowCatalog(false); };
   const filteredCatalog = catSearch ? catalog.filter(p => p.product_name?.toLowerCase().includes(catSearch.toLowerCase()) || p.partner_category?.toLowerCase().includes(catSearch.toLowerCase())) : catalog;
@@ -397,23 +420,23 @@ function MarketplaceTab({ data, canEdit, onSave }) {
       </div>}
       <div><div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider">User Provided Apps ({data.upas.length})</h3>
+          <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider">User Provided Apps ({upas.length})</h3>
           <p className="text-xs text-[var(--text-muted)] mt-0.5">Custom apps not in the marketplace catalog</p>
         </div>
-        {canEdit&&<button onClick={()=>onSave("upas",{name:"New App",sort_order:data.upas.length})} className="flex items-center gap-1 text-xs text-blue-400"><Plus className="w-3.5 h-3.5"/> Add App</button>}
+        {canEdit&&<button onClick={()=>onSave("upas",{name:"New App",sort_order:upas.length})} className="flex items-center gap-1 text-xs text-blue-400"><Plus className="w-3.5 h-3.5"/> Add App</button>}
       </div>
         <div className="space-y-3">
-          {data.upas.map(u=>(
+          {upas.map(u=>(
             <div key={u.id} className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-4">
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Name" value={u.name} onChange={v=>debouncedSave("upas",{...u,name:v})} disabled={!canEdit}/>
-                <Field label="Website URL" value={u.website_url} onChange={v=>debouncedSave("upas",{...u,website_url:v})} disabled={!canEdit}/>
-                <Field label="Use Case" value={u.use_case} onChange={v=>debouncedSave("upas",{...u,use_case:v})} disabled={!canEdit} wide/>
-                <Field label="Has Deep Link" value={u.has_deeplink} onChange={v=>onSave("upas",{...u,has_deeplink:v})} disabled={!canEdit} type="checkbox" hint="Can open directly from the platform"/>
+                <Field label="Name" value={u.name} onChange={v=>updUpa(u.id,"name",v)} disabled={!canEdit}/>
+                <Field label="Website URL" value={u.website_url} onChange={v=>updUpa(u.id,"website_url",v)} disabled={!canEdit}/>
+                <Field label="Use Case" value={u.use_case} onChange={v=>updUpa(u.id,"use_case",v)} disabled={!canEdit} wide/>
+                <Field label="Has Deep Link" value={u.has_deeplink} onChange={v=>{setUpas(prev=>prev.map(x=>x.id===u.id?{...x,has_deeplink:v}:x));onSave("upas",{...u,has_deeplink:v});}} disabled={!canEdit} type="checkbox" hint="Can open directly from the platform"/>
                 {canEdit&&<div className="flex justify-end col-span-2"><button onClick={()=>onSave("upas",{id:u.id},"delete")} className="text-xs text-red-400 flex items-center gap-1"><Trash2 className="w-3 h-3"/> Remove</button></div>}
               </div>
             </div>))}
-          {data.upas.length===0&&<div className="text-center py-8 text-[var(--text-muted)] text-sm">No custom apps added yet</div>}
+          {upas.length===0&&<div className="text-center py-8 text-[var(--text-muted)] text-sm">No custom apps added yet</div>}
         </div>
       </div>
     </div>
@@ -423,22 +446,28 @@ function MarketplaceTab({ data, canEdit, onSave }) {
 
 function InstallNumInput({value,onSave,disabled}) {
   const [local,setLocal] = useState(String(value||0));
-  const timer = useRef(null);
   const prevValue = useRef(value);
   useEffect(()=>{if(value!==prevValue.current){prevValue.current=value;setLocal(String(value||0));}},[value]);
   const handleChange = e => {
     const v = e.target.value.replace(/\D/g,"");
     setLocal(v);
-    if(timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(()=>{const n=parseInt(v)||0;prevValue.current=n;onSave(n);}, 800);
+    const n=parseInt(v)||0;
+    prevValue.current=n;
+    onSave(n);
   };
-  useEffect(()=>()=>{if(timer.current) clearTimeout(timer.current)},[]);
   return <input type="text" inputMode="numeric" className="w-12 bg-transparent text-center text-[var(--text)] text-sm focus:outline-none border-none" value={local} onChange={handleChange} disabled={disabled}/>;
 }
 
 function InstallTab({ data, canEdit, onSave }) {
+  const [forecasts, setForecasts] = useState(data.forecasts || []);
+  const prevJson = useRef(JSON.stringify(data.forecasts||[]));
+  useEffect(()=>{const json=JSON.stringify(data.forecasts||[]);if(json!==prevJson.current){prevJson.current=json;setForecasts(data.forecasts||[]);}},[data.forecasts]);
+  const debouncedSave = useDebouncedCallback(onSave, 800);
+  const updForecast = (id,field,val) => {
+    setForecasts(prev=>{const next=prev.map(f=>f.id===id?{...f,[field]:val}:f);const row=next.find(f=>f.id===id);if(row) debouncedSave("forecasts",row);return next;});
+  };
   const M=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  const byY={};data.forecasts.forEach(f=>{if(!byY[f.year])byY[f.year]=[];byY[f.year].push(f);});
+  const byY={};forecasts.forEach(f=>{if(!byY[f.year])byY[f.year]=[];byY[f.year].push(f);});
   return (
     <div className="space-y-8">
       <p className="text-sm text-[var(--text-muted)]">Monthly install forecasts vs actuals for <strong className="text-[var(--text)]">{data.fleet_name}</strong></p>
@@ -451,11 +480,11 @@ function InstallTab({ data, canEdit, onSave }) {
             <th className="px-3 py-3 text-center text-xs text-[var(--text-secondary)] font-semibold bg-blue-500/10">Total</th>
           </tr></thead><tbody>
             <tr className="border-t border-[var(--border)]/50"><td className="px-3 py-2 text-amber-400 font-medium text-xs">Forecast</td>
-              {s.map(f=><td key={f.month} className="px-1 py-2 text-center"><InstallNumInput value={f.forecasted} onSave={v=>onSave("forecasts",{...f,forecasted:v})} disabled={!canEdit}/></td>)}
+              {s.map(f=><td key={f.month} className="px-1 py-2 text-center"><InstallNumInput value={f.forecasted} onSave={v=>updForecast(f.id,"forecasted",v)} disabled={!canEdit}/></td>)}
               <td className="px-3 py-2 text-center font-bold text-amber-400 bg-blue-500/5">{s.reduce((a,f)=>a+(f.forecasted||0),0)}</td>
             </tr>
             <tr className="border-t border-[var(--border)]/50"><td className="px-3 py-2 text-emerald-400 font-medium text-xs">Actual</td>
-              {s.map(f=><td key={f.month} className="px-1 py-2 text-center"><InstallNumInput value={f.actual} onSave={v=>onSave("forecasts",{...f,actual:v})} disabled={!canEdit}/></td>)}
+              {s.map(f=><td key={f.month} className="px-1 py-2 text-center"><InstallNumInput value={f.actual} onSave={v=>updForecast(f.id,"actual",v)} disabled={!canEdit}/></td>)}
               <td className="px-3 py-2 text-center font-bold text-emerald-400 bg-blue-500/5">{s.reduce((a,f)=>a+(f.actual||0),0)}</td>
             </tr>
           </tbody></table></div></div>);
@@ -694,6 +723,8 @@ export default function ScopePage() {
   const { toast } = useToast();
   const canEdit = data?.role==="owner"||data?.role==="editor";
   const [refData, setRefData] = useState({});
+  const [completionData, setCompletionData] = useState(null);
+  const [completionConfig, setCompletionConfig] = useState({});
 
   const load = useCallback(async()=>{
     const r=await fetch(`/api/scopes/${scopeId}`);
@@ -706,16 +737,32 @@ export default function ScopePage() {
     if(r.ok){const d=await r.json();const mapped={};for(const[cat,items]of Object.entries(d.data||{})){mapped[cat]=(items||[]).map(i=>i.value);}setRefData(mapped);}
   },[]);
 
+  const loadCompletion = useCallback(async()=>{
+    try{const r=await fetch(`/api/scopes/completion`);if(r.ok){const all=await r.json();if(all[scopeId]) setCompletionData(all[scopeId]);}}catch{}
+  },[scopeId]);
+
+  const loadCompletionConfig = useCallback(async()=>{
+    try{const r=await fetch("/api/admin/completion-config");if(r.ok){setCompletionConfig(await r.json());}}catch{}
+  },[]);
+
   useEffect(()=>{load();},[load]);
   useEffect(()=>{loadRef();},[loadRef]);
   useEffect(()=>{if(tab==="overview") loadRef();},[tab, loadRef]);
+  useEffect(()=>{loadCompletion();},[loadCompletion]);
+  useEffect(()=>{loadCompletionConfig();},[loadCompletionConfig]);
 
   const [saveErr,setSaveErr] = useState("");
   const save = async(section,d,action)=>{
     setSaving(true);setSaveErr("");
     const r=await fetch(`/api/scopes/${scopeId}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({section,data:d,action})});
     setSaving(false);
-    if(r.ok){setSaved(true);setTimeout(()=>setSaved(false),2000);await load();}
+    if(r.ok){
+      setSaved(true);setTimeout(()=>setSaved(false),2000);
+      // Only re-fetch full data for structural changes (add/delete/bulk).
+      // For inline edits, skip reload to avoid resetting input state mid-typing.
+      if(action==="delete"||action==="bulk"||(!action && !d.id)){await load();}
+      loadCompletion();
+    }
     else{const e=await r.json().catch(()=>({}));const msg=e.error||"Save failed";setSaveErr(msg);toast(msg,"error");setTimeout(()=>setSaveErr(""),5000);}
     return r.ok;
   };
@@ -723,15 +770,25 @@ export default function ScopePage() {
   if(loading) return <div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"/></div>;
   if(err||!data) return <div className="min-h-screen flex items-center justify-center"><div className="text-center"><p className="text-red-400 mb-4">{err}</p><button onClick={()=>router.push("/dashboard")} className="text-blue-400">← Dashboard</button></div></div>;
 
+  // Helper to get required/missing fields for a tab
+  const getTabFieldProps = (tabKey) => {
+    const cfg = completionConfig[tabKey];
+    const cd = completionData?.tabs?.[tabKey];
+    return {
+      requiredFields: cfg?.required_fields || [],
+      missingFields: cd?.missingFields || [],
+    };
+  };
+
   const renderTab = () => {
     switch(tab){
       case "summary": return <SummaryTab data={data} onNavigate={setTab}/>;
-      case "overview": return <OverviewTab data={data} canEdit={canEdit} onSave={save} refData={refData}/>;
-      case "contacts": return <ContactsTab data={data} canEdit={canEdit} onSave={save}/>;
-      case "marketplace": return <MarketplaceTab data={data} canEdit={canEdit} onSave={save}/>;
-      case "solution": return <><SolutionTab data={data} canEdit={canEdit} onSave={save}/><SolutionLinkedSection data={data}/></>;
-      case "gaps": return <GapsTab data={data} canEdit={canEdit} onSave={save}/>;
-      case "install": return <InstallTab data={data} canEdit={canEdit} onSave={save}/>;
+      case "overview": return <OverviewTab data={data} canEdit={canEdit} onSave={save} refData={refData} {...getTabFieldProps("overview")}/>;
+      case "contacts": return <ContactsTab data={data} canEdit={canEdit} onSave={save} {...getTabFieldProps("contacts")}/>;
+      case "marketplace": return <MarketplaceTab data={data} canEdit={canEdit} onSave={save} {...getTabFieldProps("marketplace")}/>;
+      case "solution": return <><SolutionTab data={data} canEdit={canEdit} onSave={save} {...getTabFieldProps("solution")}/><SolutionLinkedSection data={data}/></>;
+      case "gaps": return <GapsTab data={data} canEdit={canEdit} onSave={save} {...getTabFieldProps("gaps")}/>;
+      case "install": return <InstallTab data={data} canEdit={canEdit} onSave={save} {...getTabFieldProps("install")}/>;
       case "stats": return <StatsTab data={data}/>;
       case "sharing": return <SharingTab data={data} scopeId={scopeId}/>;
       case "workshop": return <WorkshopTabComp data={data} canEdit={canEdit} onSave={save}/>;
@@ -758,7 +815,7 @@ export default function ScopePage() {
         </div>
         <nav className="py-2">{TABS.map(t=>{const I=t.icon;const hasChildren=t.children&&t.children.length;const isExpanded=expandedGroups[t.id]||false;const childActive=hasChildren&&t.children.some(c=>c.id===tab);return(
           <div key={t.id}>
-            <button onClick={()=>{if(hasChildren){setExpandedGroups(p=>({...p,[t.id]:!p[t.id]}));if(!isExpanded&&!childActive)setTab(t.id);}else{setTab(t.id);}}} className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition border-l-2 ${tab===t.id||childActive?"bg-blue-500/10 text-blue-400 border-l-blue-400 font-semibold":"text-[var(--text-muted)] hover:text-[var(--text)] border-l-transparent"}`}><I className="w-4 h-4 flex-shrink-0"/><span className="flex-1 text-left">{t.label}</span>{hasChildren&&<ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded||childActive?"rotate-0":"rotate-[-90deg]"}`}/>}</button>
+            <button onClick={()=>{if(hasChildren){setExpandedGroups(p=>({...p,[t.id]:!p[t.id]}));if(!isExpanded&&!childActive)setTab(t.id);}else{setTab(t.id);}}} className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition border-l-2 ${tab===t.id||childActive?"bg-blue-500/10 text-blue-400 border-l-blue-400 font-semibold":"text-[var(--text-muted)] hover:text-[var(--text)] border-l-transparent"}`}><I className="w-4 h-4 flex-shrink-0"/><span className="flex-1 text-left">{t.label}</span>{completionData?.tabs?.[t.id]!==undefined&&completionData.tabs[t.id].total>0&&<CompletionDot percent={completionData.tabs[t.id].percent}/>}{hasChildren&&<ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded||childActive?"rotate-0":"rotate-[-90deg]"}`}/>}</button>
             {hasChildren&&(isExpanded||childActive)&&t.children.map(c=>(
               <button key={c.id} onClick={()=>setTab(c.id)} className={`w-full flex items-center gap-3 pl-11 pr-4 py-2 text-xs transition border-l-2 ${tab===c.id?"bg-blue-500/10 text-blue-400 border-l-blue-400 font-semibold":"text-[var(--text-muted)] hover:text-[var(--text)] border-l-transparent"}`}>{c.label}</button>
             ))}
@@ -780,6 +837,21 @@ export default function ScopePage() {
             <a href={`/api/scopes/${scopeId}/export`} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-600/30 transition-colors"><Download className="w-3.5 h-3.5"/> Export Excel</a>
           </div>
         </div>
+        {completionData && (
+          <div className="px-8 pt-4 max-w-5xl">
+            <CompletionBar percent={completionData.overall} size="md" showLabel label="Scope Completion" />
+          </div>
+        )}
+        {completionData?.tabs?.[tab] && completionData.tabs[tab].total > 0 && (
+          <div className="px-8 pt-2 max-w-5xl">
+            <p className="text-xs text-[var(--text-muted)]">
+              {TABS.find(t=>t.id===tab)?.label || tab}: <span className={`font-semibold ${completionData.tabs[tab].percent>=100?"text-emerald-400":completionData.tabs[tab].percent>=67?"text-cyan-400":completionData.tabs[tab].percent>=34?"text-amber-400":"text-rose-400"}`}>{completionData.tabs[tab].percent}% complete</span> — {completionData.tabs[tab].filled} of {completionData.tabs[tab].total} required items filled
+              {completionData.tabs[tab].missingFields.length > 0 && (
+                <span className="text-[var(--text-muted)]"> (missing: {completionData.tabs[tab].missingFields.slice(0,5).join(", ")}{completionData.tabs[tab].missingFields.length>5?` +${completionData.tabs[tab].missingFields.length-5} more`:""})</span>
+              )}
+            </p>
+          </div>
+        )}
         <div className="p-8 max-w-5xl">{renderTab()}</div>
       </main>
     </div>

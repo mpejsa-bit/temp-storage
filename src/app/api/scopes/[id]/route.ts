@@ -5,10 +5,11 @@ import {
   getContacts, getMarketplaceApps, getUPAs, getFeatures, getGaps, getForms,
   getWorkflow, getForecasts, getScopeStats, getCollaborators, getWorkshopQuestions,
   getTrainingQuestions, cloneScope, upsertRow, deleteRow,
-  getWorkflowTechnical, upsertWorkflowTechnical
+  getWorkflowTechnical, upsertWorkflowTechnical, getCompletionConfig
 } from "@/lib/scopes";
 import { getDb, saveDb } from "@/lib/db";
 import { generateId } from "@/lib/utils";
+import { computeScopeCompletion } from "@/lib/completion";
 
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   const session = await auth();
@@ -185,6 +186,30 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     const touchDb = await getDb();
     touchDb.run("UPDATE scope_documents SET updated_at = ? WHERE id = ?", [new Date().toISOString(), id]);
     saveDb();
+
+    // Auto-update status based on completion %
+    try {
+      const config = await getCompletionConfig();
+      const overview = await getOverview(id);
+      const scopeData: Record<string, any> = {
+        overview,
+        contacts: await getContacts(id),
+        marketplace_apps: await getMarketplaceApps(id),
+        upas: await getUPAs(id),
+        features: await getFeatures(id),
+        gaps: await getGaps(id),
+        workshop_questions: await getWorkshopQuestions(id),
+        training_questions: await getTrainingQuestions(id),
+        forms: await getForms(id),
+        forecasts: await getForecasts(id),
+        workflow_technical: await getWorkflowTechnical(id),
+      };
+      const { overall } = computeScopeCompletion(scopeData, config);
+      const newStatus = overall >= 100 ? "complete" : overall > 0 ? "active" : "draft";
+      const db2 = await getDb();
+      db2.run("UPDATE scope_documents SET status = ? WHERE id = ?", [newStatus, id]);
+      saveDb();
+    } catch {}
 
     return NextResponse.json({ ok: true });
   } catch (e: unknown) {

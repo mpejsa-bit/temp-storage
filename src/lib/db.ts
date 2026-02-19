@@ -330,6 +330,13 @@ function initSchema(db: Database) {
       description TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS completion_config (
+      id TEXT PRIMARY KEY,
+      tab_key TEXT UNIQUE NOT NULL,
+      config_json TEXT NOT NULL DEFAULT '{}',
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS workflow_technical (
       id TEXT PRIMARY KEY,
       scope_id TEXT UNIQUE NOT NULL REFERENCES scope_documents(id) ON DELETE CASCADE,
@@ -406,6 +413,19 @@ function initSchema(db: Database) {
 }
 
 function runMigrations(db: Database) {
+  // Add is_admin column to users
+  try { db.run("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0"); } catch {}
+
+  // Add completion_config table for existing databases
+  try {
+    db.run(`CREATE TABLE IF NOT EXISTS completion_config (
+      id TEXT PRIMARY KEY,
+      tab_key TEXT UNIQUE NOT NULL,
+      config_json TEXT NOT NULL DEFAULT '{}',
+      updated_at TEXT DEFAULT (datetime('now'))
+    )`);
+  } catch {}
+
   const techAppCols = [
     "tech_tpms","tech_trailer_tracking","tech_freight_visibility","tech_lane_departure",
     "tech_incab_navigation","tech_trailer_tracking_tms","tech_video_safety","tech_load_optimization",

@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Plus, Trash2, ClipboardList, ChevronDown, ChevronRight, RotateCcw } from "lucide-react";
 import { useDebouncedCallback } from "@/hooks/useDebounce";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -16,7 +16,9 @@ const DEFAULT_FORMS = [
 export default function FormsTab({ data, canEdit, onSave }) {
   const [expanded, setExpanded] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const forms = data.forms || [];
+  const [forms, setForms] = useState(data.forms || []);
+  const prevJson = useRef(JSON.stringify(data.forms||[]));
+  useEffect(()=>{const json=JSON.stringify(data.forms||[]);if(json!==prevJson.current){prevJson.current=json;setForms(data.forms||[]);}},[data.forms]);
 
   const addForm = async () => {
     await onSave("forms", {
@@ -47,11 +49,13 @@ export default function FormsTab({ data, canEdit, onSave }) {
   };
 
   const debouncedSave = useDebouncedCallback(onSave, 800);
-  const updateForm = async (form, field, value) => {
-    await onSave("forms", { ...form, [field]: value });
+  const updateForm = (form, field, value) => {
+    setForms(prev=>prev.map(f=>f.id===form.id?{...f,[field]:value}:f));
+    onSave("forms", { ...form, [field]: value });
   };
-  const debouncedUpdateForm = async (form, field, value) => {
-    await debouncedSave("forms", { ...form, [field]: value });
+  const debouncedUpdateForm = (form, field, value) => {
+    setForms(prev=>prev.map(f=>f.id===form.id?{...f,[field]:value}:f));
+    debouncedSave("forms", { ...form, [field]: value });
   };
 
   const deleteForm = async (form) => {

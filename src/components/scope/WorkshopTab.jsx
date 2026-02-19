@@ -1,6 +1,7 @@
 "use client";
+import { useState, useEffect, useRef } from "react";
 import { Plus, Trash2, MessageSquare, RotateCcw } from "lucide-react";
-import { useDebouncedCallback } from "@/hooks/useDebounce";
+import { useDebounce, useDebouncedCallback } from "@/hooks/useDebounce";
 
 const DEFAULT_QUESTIONS = [
   {cat:"Technology & Integrations",q:"Of the legacy systems {fleet} is using today, what is the level of satisfaction with each?"},
@@ -55,7 +56,9 @@ const DEFAULT_QUESTIONS = [
 
 export default function WorkshopTab({ data, canEdit, onSave }) {
   const fleet = data.fleet_name || "Fleet";
-  const questions = data.workshop || [];
+  const [questions, setQuestions] = useState(data.workshop || []);
+  const prevJson = useRef(JSON.stringify(data.workshop||[]));
+  useEffect(()=>{const json=JSON.stringify(data.workshop||[]);if(json!==prevJson.current){prevJson.current=json;setQuestions(data.workshop||[]);}},[data.workshop]);
 
   const populateDefaults = async () => {
     const bulkQuestions = DEFAULT_QUESTIONS.map((dq, i) => ({
@@ -68,8 +71,9 @@ export default function WorkshopTab({ data, canEdit, onSave }) {
   };
 
   const debouncedSave = useDebouncedCallback(onSave, 800);
-  const updateQuestion = async (q, field, value) => {
-    await debouncedSave("workshop", { ...q, [field]: value });
+  const updateQuestion = (q, field, value) => {
+    setQuestions(prev=>prev.map(item=>item.id===q.id?{...item,[field]:value}:item));
+    debouncedSave("workshop", { ...q, [field]: value });
   };
 
   const deleteQuestion = async (q) => {

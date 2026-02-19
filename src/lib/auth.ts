@@ -25,7 +25,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           hash
         );
         if (!valid) return null;
-        return { id, email, name };
+        // Check admin status
+        const adminRow = db.exec("SELECT is_admin FROM users WHERE id = ?", [id]);
+        const isAdmin = adminRow.length && adminRow[0].values.length ? adminRow[0].values[0][0] === 1 : false;
+        return { id, email, name, is_admin: isAdmin };
       },
     }),
   ],
@@ -34,12 +37,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
+        token.is_admin = (user as any).is_admin ?? false;
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user && token.id) {
         session.user.id = token.id as string;
+        (session.user as any).is_admin = token.is_admin ?? false;
       }
       return session;
     },

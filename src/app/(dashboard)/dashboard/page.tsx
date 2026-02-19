@@ -10,6 +10,7 @@ import SalesforceSearchModal from "@/components/scope/SalesforceSearchModal";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { useToast } from "@/components/Toast";
+import CompletionBar from "@/components/scope/CompletionBar";
 
 interface Scope {
   id: string;
@@ -38,6 +39,7 @@ export default function DashboardPage() {
   const [sortField, setSortField] = useState<SortField>("updated");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [completionData, setCompletionData] = useState<Record<string, { overall: number }>>({});
   const router = useRouter();
   const { toast } = useToast();
 
@@ -57,7 +59,16 @@ export default function DashboardPage() {
     setLoading(false);
   }
 
-  useEffect(() => { loadScopes(); }, []);
+  async function loadCompletion() {
+    try {
+      const res = await fetch("/api/scopes/completion", { cache: "no-store" });
+      if (res.ok) {
+        setCompletionData(await res.json());
+      }
+    } catch {}
+  }
+
+  useEffect(() => { loadScopes(); loadCompletion(); }, []);
 
   // Close menu on click outside
   useEffect(() => {
@@ -146,7 +157,8 @@ export default function DashboardPage() {
 
   const statusColors: Record<string, string> = {
     draft: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-    active: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+    active: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+    complete: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
     archived: "bg-gray-500/10 text-gray-400 border-gray-500/20",
   };
 
@@ -221,6 +233,7 @@ export default function DashboardPage() {
             <option value="all">All statuses</option>
             <option value="draft">Draft</option>
             <option value="active">Active</option>
+            <option value="complete">Complete</option>
             <option value="archived">Archived</option>
           </select>
           <div className="flex bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg overflow-hidden">
@@ -313,6 +326,11 @@ export default function DashboardPage() {
                     <ChevronRight className="w-5 h-5 text-[var(--border)] group-hover:text-blue-400 transition" />
                   </div>
                 </div>
+                {completionData[scope.id] !== undefined && (
+                  <div className="mt-3 ml-14 mr-4">
+                    <CompletionBar percent={completionData[scope.id]?.overall ?? 100} size="sm" showLabel />
+                  </div>
+                )}
               </div>
             ))}
           </div>

@@ -731,6 +731,56 @@ export async function upsertRow(table: string, data: Record<string, unknown>) {
   return id;
 }
 
+// ── Completion Config ─────────────────────────────────────────────────
+export interface TabCompletionConfig {
+  required_fields: string[];
+  min_rows?: number;
+}
+
+export async function getCompletionConfig(): Promise<Record<string, TabCompletionConfig>> {
+  const db = await getDb();
+  const result = db.exec("SELECT tab_key, config_json FROM completion_config");
+  const config: Record<string, TabCompletionConfig> = {};
+  if (result.length) {
+    for (const row of result[0].values) {
+      const tabKey = row[0] as string;
+      try {
+        config[tabKey] = JSON.parse(row[1] as string);
+      } catch {
+        config[tabKey] = { required_fields: [] };
+      }
+    }
+  }
+  return config;
+}
+
+export async function upsertCompletionConfig(tabKey: string, tabConfig: TabCompletionConfig): Promise<void> {
+  const db = await getDb();
+  const configJson = JSON.stringify(tabConfig);
+  const now = new Date().toISOString();
+  const existing = db.exec("SELECT id FROM completion_config WHERE tab_key = ?", [tabKey]);
+  if (existing.length && existing[0].values.length) {
+    db.run("UPDATE completion_config SET config_json = ?, updated_at = ? WHERE tab_key = ?", [configJson, now, tabKey]);
+  } else {
+    db.run("INSERT INTO completion_config (id, tab_key, config_json, updated_at) VALUES (?, ?, ?, ?)", [generateId(), tabKey, configJson, now]);
+  }
+  saveDb();
+}
+
+// ── Admin Role ────────────────────────────────────────────────────────
+export async function isUserAdmin(userId: string): Promise<boolean> {
+  const db = await getDb();
+  const result = db.exec("SELECT is_admin FROM users WHERE id = ?", [userId]);
+  if (!result.length || !result[0].values.length) return false;
+  return result[0].values[0][0] === 1;
+}
+
+export async function setUserAdmin(userId: string, isAdmin: boolean): Promise<void> {
+  const db = await getDb();
+  db.run("UPDATE users SET is_admin = ? WHERE id = ?", [isAdmin ? 1 : 0, userId]);
+  saveDb();
+}
+
 export async function deleteRow(table: string, id: string) {
   if (!ALLOWED_TABLES.has(table)) {
     throw new Error(`Table "${table}" is not allowed`);

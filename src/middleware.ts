@@ -25,7 +25,9 @@ export const config = {
   matcher: [
     "/dashboard/:path*",
     "/scopes/:path*",
+    "/admin/:path*",
     "/api/scopes/:path*",
     "/api/ref/:path*",
+    "/api/admin/:path*",
   ],
 };

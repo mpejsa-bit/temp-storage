@@ -1,4 +1,5 @@
 "use client";
+import { useState, useEffect, useRef } from "react";
 import { Plus, Trash2, GraduationCap, RotateCcw } from "lucide-react";
 import { useDebouncedCallback } from "@/hooks/useDebounce";
 
@@ -19,7 +20,9 @@ const DEFAULT_TRAINING_QS = [
 
 export default function TrainingTab({ data, canEdit, onSave }) {
   const fleet = data.fleet_name || "Fleet";
-  const questions = data.training || [];
+  const [questions, setQuestions] = useState(data.training || []);
+  const prevJson = useRef(JSON.stringify(data.training||[]));
+  useEffect(()=>{const json=JSON.stringify(data.training||[]);if(json!==prevJson.current){prevJson.current=json;setQuestions(data.training||[]);}},[data.training]);
 
   const populateDefaults = async () => {
     const bulk = DEFAULT_TRAINING_QS.map((dq, i) => ({
@@ -33,8 +36,9 @@ export default function TrainingTab({ data, canEdit, onSave }) {
   };
 
   const debouncedSave = useDebouncedCallback(onSave, 800);
-  const updateQuestion = async (q, field, value) => {
-    await debouncedSave("training", { ...q, [field]: value });
+  const updateQuestion = (q, field, value) => {
+    setQuestions(prev=>prev.map(item=>item.id===q.id?{...item,[field]:value}:item));
+    debouncedSave("training", { ...q, [field]: value });
   };
 
   const deleteQuestion = async (q) => {
