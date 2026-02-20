@@ -4,13 +4,15 @@ import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
   Plus, FileText, Clock, Users, Search, LogOut, MoreVertical,
-  Trash2, Copy, ExternalLink, ChevronRight, Layers, ArrowUpDown, Settings
+  Trash2, Copy, ExternalLink, ChevronRight, Layers, ArrowUpDown, Settings,
+  Download, ChevronDown
 } from "lucide-react";
 import SalesforceSearchModal from "@/components/scope/SalesforceSearchModal";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { useToast } from "@/components/Toast";
 import CompletionBar from "@/components/scope/CompletionBar";
+import NotificationBell from "@/components/NotificationBell";
 
 interface Scope {
   id: string;
@@ -41,6 +43,7 @@ export default function DashboardPage() {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [completionData, setCompletionData] = useState<Record<string, { overall: number }>>({});
   const [isAdmin, setIsAdmin] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -83,11 +86,11 @@ export default function DashboardPage() {
 
   // Close menu on click outside
   useEffect(() => {
-    if (!menuOpen) return;
-    const handler = () => setMenuOpen(null);
+    if (!menuOpen && !exportOpen) return;
+    const handler = () => { setMenuOpen(null); setExportOpen(false); };
     window.addEventListener("click", handler);
     return () => window.removeEventListener("click", handler);
-  }, [menuOpen]);
+  }, [menuOpen, exportOpen]);
 
   // Close create modal on Escape
   useEffect(() => {
@@ -140,7 +143,8 @@ export default function DashboardPage() {
 
   // Filtering
   let filtered = scopes.filter(s =>
-    s.fleet_name.toLowerCase().includes(search.toLowerCase())
+    s.fleet_name.toLowerCase().includes(search.toLowerCase()) ||
+    s.owner_name?.toLowerCase().includes(search.toLowerCase())
   );
   if (filterStatus !== "all") {
     filtered = filtered.filter(s => s.status === filterStatus);
@@ -198,6 +202,7 @@ export default function DashboardPage() {
                 Admin
               </button>
             )}
+            <NotificationBell />
             <ThemeToggle />
             <button
               onClick={() => signOut({ callbackUrl: "/login" })}
@@ -217,13 +222,45 @@ export default function DashboardPage() {
             <h1 className="text-2xl font-bold mb-1">Solutions Documents</h1>
             <p className="text-[var(--text-muted)] text-sm">{scopes.length} document{scopes.length !== 1 ? "s" : ""}</p>
           </div>
-          <button
-            onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg transition"
-          >
-            <Plus className="w-4 h-4" />
-            New Solutions Document
-          </button>
+          <div className="flex items-center gap-3">
+            <div className="relative" onClick={e => e.stopPropagation()}>
+              <button
+                onClick={() => setExportOpen(!exportOpen)}
+                className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text)] bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg hover:border-blue-500/40 transition"
+              >
+                <Download className="w-4 h-4" />
+                Export All
+                <ChevronDown className="w-3.5 h-3.5" />
+              </button>
+              {exportOpen && (
+                <div className="absolute right-0 top-full mt-1 bg-[var(--bg-card)] border border-[var(--border)] rounded-lg shadow-xl py-1 z-10 min-w-[160px]">
+                  <a
+                    href="/api/scopes/export-all"
+                    download="scopes-export.json"
+                    className="w-full px-4 py-2 text-left text-sm text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--bg-secondary)] flex items-center gap-2"
+                    onClick={() => setExportOpen(false)}
+                  >
+                    <FileText className="w-3.5 h-3.5" /> Export JSON
+                  </a>
+                  <a
+                    href="/api/scopes/export-all?format=csv"
+                    download="scopes-export.csv"
+                    className="w-full px-4 py-2 text-left text-sm text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--bg-secondary)] flex items-center gap-2"
+                    onClick={() => setExportOpen(false)}
+                  >
+                    <Download className="w-3.5 h-3.5" /> Export CSV
+                  </a>
+                </div>
+              )}
+            </div>
+            <button
+              onClick={() => setShowCreate(true)}
+              className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg transition"
+            >
+              <Plus className="w-4 h-4" />
+              New Solutions Document
+            </button>
+          </div>
         </div>
 
         {/* Create Modal */}
@@ -241,7 +278,7 @@ export default function DashboardPage() {
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Search solutions documents..."
+              placeholder="Search by name or owner..."
               className="w-full pl-11 pr-4 py-3 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500 transition"
             />
           </div>

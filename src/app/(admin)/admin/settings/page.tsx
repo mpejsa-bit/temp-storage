@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { ArrowLeft, ChevronDown, ChevronRight, Save, Loader2, Shield, Users, Settings } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronRight, Save, Loader2, Shield, Users, Settings, Download, Trash2, ArrowRightLeft, ShieldCheck, ShieldOff, X } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useToast } from "@/components/Toast";
 
@@ -246,6 +246,16 @@ export default function AdminSettingsPage() {
   const [activity, setActivity] = useState<ActivityRecord[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
 
+  // User management state
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [togglingAdmin, setTogglingAdmin] = useState<string | null>(null);
+  const [deletingUser, setDeletingUser] = useState<string | null>(null);
+  const [transferModal, setTransferModal] = useState<{ userId: string; userName: string } | null>(null);
+  const [userScopes, setUserScopes] = useState<{ id: string; fleet_name: string }[]>([]);
+  const [transferringScope, setTransferringScope] = useState<string | null>(null);
+  const [transferTargetId, setTransferTargetId] = useState<string>("");
+
   /* ── Check admin status ──────────────────────────────────────── */
 
   useEffect(() => {
@@ -319,6 +329,104 @@ export default function AdminSettingsPage() {
       fetchActivity();
     }
   }, [activeSection, isAdmin, fetchActivity]);
+
+  /* ── User management handlers ────────────────────────────────── */
+
+  // Get current user's session ID
+  useEffect(() => {
+    async function fetchSession() {
+      try {
+        const res = await fetch("/api/auth/session");
+        if (res.ok) {
+          const data = await res.json();
+          setCurrentUserId(data?.user?.id || null);
+        }
+      } catch { /* ignore */ }
+    }
+    fetchSession();
+  }, []);
+
+  async function toggleAdmin(userId: string, currentIsAdmin: number) {
+    setTogglingAdmin(userId);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_admin: currentIsAdmin === 1 ? false : true }),
+      });
+      if (res.ok) {
+        setUsers((prev) =>
+          prev.map((u) =>
+            u.id === userId ? { ...u, is_admin: currentIsAdmin === 1 ? 0 : 1 } : u
+          )
+        );
+        toast(
+          currentIsAdmin === 1 ? "Admin privileges removed" : "Admin privileges granted",
+          "success"
+        );
+      } else {
+        const body = await res.json().catch(() => ({}));
+        toast(body.error || "Failed to update user", "error");
+      }
+    } catch {
+      toast("Network error updating user", "error");
+    }
+    setTogglingAdmin(null);
+  }
+
+  async function handleDeleteUser(userId: string) {
+    setDeletingUser(userId);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        setUsers((prev) => prev.filter((u) => u.id !== userId));
+        toast("User deleted successfully", "success");
+      } else {
+        const body = await res.json().catch(() => ({}));
+        toast(body.error || "Failed to delete user", "error");
+      }
+    } catch {
+      toast("Network error deleting user", "error");
+    }
+    setDeletingUser(null);
+    setDeleteConfirmId(null);
+  }
+
+  async function openTransferModal(userId: string, userName: string) {
+    setTransferModal({ userId, userName });
+    setUserScopes([]);
+    setTransferTargetId("");
+    try {
+      const res = await fetch(`/api/admin/users/${userId}/scopes`, { cache: "no-store" });
+      if (res.ok) {
+        const scopes = await res.json();
+        setUserScopes(scopes);
+      }
+    } catch { /* ignore */ }
+  }
+
+  async function handleTransferScope(scopeId: string, newOwnerId: string) {
+    setTransferringScope(scopeId);
+    try {
+      const res = await fetch("/api/admin/transfer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scope_id: scopeId, new_owner_id: newOwnerId }),
+      });
+      if (res.ok) {
+        setUserScopes((prev) => prev.filter((s) => s.id !== scopeId));
+        toast("Scope ownership transferred", "success");
+      } else {
+        const body = await res.json().catch(() => ({}));
+        toast(body.error || "Transfer failed", "error");
+      }
+    } catch {
+      toast("Network error during transfer", "error");
+    }
+    setTransferringScope(null);
+  }
 
   /* ── Helpers ────────────────────────────────────────────────── */
 
@@ -636,17 +744,20 @@ export default function AdminSettingsPage() {
                           <th className="text-center px-4 py-3 text-[var(--text-secondary)] font-medium">Logins</th>
                           <th className="text-left px-4 py-3 text-[var(--text-secondary)] font-medium">Created</th>
                           <th className="text-center px-4 py-3 text-[var(--text-secondary)] font-medium">Role</th>
+                          <th className="text-center px-4 py-3 text-[var(--text-secondary)] font-medium">Manage</th>
                         </tr>
                       </thead>
                       <tbody>
                         {users.length === 0 ? (
                           <tr>
-                            <td colSpan={5} className="px-4 py-8 text-center text-[var(--text-muted)]">
+                            <td colSpan={6} className="px-4 py-8 text-center text-[var(--text-muted)]">
                               No users found
                             </td>
                           </tr>
                         ) : (
-                          users.map((u) => (
+                          users.map((u) => {
+                            const isSelf = u.id === currentUserId;
+                            return (
                             <tr key={u.id} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--bg-secondary)] transition-colors">
                               <td className="px-4 py-3 text-[var(--text)] font-medium">{u.name}</td>
                               <td className="px-4 py-3 text-[var(--text-secondary)]" title={u.last_login_at || "Never"}>
@@ -664,8 +775,69 @@ export default function AdminSettingsPage() {
                                   <span className="text-xs text-[var(--text-muted)]">User</span>
                                 )}
                               </td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center justify-center gap-1">
+                                  {/* Toggle Admin */}
+                                  <button
+                                    onClick={() => toggleAdmin(u.id, u.is_admin)}
+                                    disabled={togglingAdmin === u.id}
+                                    title={u.is_admin === 1 ? "Remove admin" : "Make admin"}
+                                    className={`p-1.5 rounded-lg transition-colors ${
+                                      u.is_admin === 1
+                                        ? "text-blue-400 hover:bg-blue-500/15"
+                                        : "text-[var(--text-muted)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text)]"
+                                    } disabled:opacity-50`}
+                                  >
+                                    {togglingAdmin === u.id ? (
+                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : u.is_admin === 1 ? (
+                                      <ShieldOff className="w-4 h-4" />
+                                    ) : (
+                                      <ShieldCheck className="w-4 h-4" />
+                                    )}
+                                  </button>
+
+                                  {/* Transfer Scopes */}
+                                  <button
+                                    onClick={() => openTransferModal(u.id, u.name)}
+                                    title="Transfer scopes"
+                                    className="p-1.5 rounded-lg text-[var(--text-muted)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text)] transition-colors"
+                                  >
+                                    <ArrowRightLeft className="w-4 h-4" />
+                                  </button>
+
+                                  {/* Delete User */}
+                                  {deleteConfirmId === u.id ? (
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        onClick={() => handleDeleteUser(u.id)}
+                                        disabled={deletingUser === u.id}
+                                        className="px-2 py-1 text-xs bg-red-600 hover:bg-red-500 text-white rounded-md disabled:opacity-50"
+                                      >
+                                        {deletingUser === u.id ? "..." : "Confirm"}
+                                      </button>
+                                      <button
+                                        onClick={() => setDeleteConfirmId(null)}
+                                        className="px-2 py-1 text-xs text-[var(--text-muted)] hover:text-[var(--text)] rounded-md"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      onClick={() => setDeleteConfirmId(u.id)}
+                                      disabled={isSelf}
+                                      title={isSelf ? "Cannot delete yourself" : "Delete user"}
+                                      className="p-1.5 rounded-lg text-[var(--text-muted)] hover:bg-red-500/15 hover:text-red-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
                             </tr>
-                          ))
+                            );
+                          })
                         )}
                       </tbody>
                     </table>
@@ -675,9 +847,19 @@ export default function AdminSettingsPage() {
 
               {/* Recent activity log */}
               <section>
-                <h2 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-3">
-                  Recent Activity
-                </h2>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
+                    Recent Activity
+                  </h2>
+                  <a
+                    href="/api/admin/activity?format=csv"
+                    download
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text)] bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg hover:border-blue-500/40 transition-colors"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Export CSV
+                  </a>
+                </div>
                 <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
@@ -733,6 +915,87 @@ export default function AdminSettingsPage() {
             </>
           )}
         </main>
+      )}
+      {/* Transfer Scopes Modal */}
+      {transferModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl w-full max-w-lg mx-4 shadow-2xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
+              <h3 className="text-sm font-semibold text-[var(--text)]">
+                Transfer Scopes from {transferModal.userName}
+              </h3>
+              <button
+                onClick={() => setTransferModal(null)}
+                className="p-1 rounded-lg text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--bg-secondary)] transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-5 py-4 max-h-96 overflow-y-auto">
+              {userScopes.length === 0 ? (
+                <p className="text-sm text-[var(--text-muted)] text-center py-8">
+                  This user does not own any scopes.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {userScopes.map((scope) => (
+                    <div
+                      key={scope.id}
+                      className="flex items-center justify-between gap-3 p-3 bg-[var(--bg-secondary)] rounded-lg"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-[var(--text)] truncate">
+                          {scope.fleet_name}
+                        </p>
+                        <p className="text-xs text-[var(--text-muted)] font-mono">{scope.id.slice(0, 8)}...</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <select
+                          value={transferTargetId}
+                          onChange={(e) => setTransferTargetId(e.target.value)}
+                          className="text-xs px-2 py-1.5 bg-[var(--bg)] border border-[var(--border)] rounded-lg text-[var(--text)] focus:outline-none focus:border-blue-500 max-w-[140px]"
+                        >
+                          <option value="">Select user...</option>
+                          {users
+                            .filter((u) => u.id !== transferModal.userId)
+                            .map((u) => (
+                              <option key={u.id} value={u.id}>
+                                {u.name}
+                              </option>
+                            ))}
+                        </select>
+                        <button
+                          onClick={() => {
+                            if (transferTargetId) {
+                              handleTransferScope(scope.id, transferTargetId);
+                            }
+                          }}
+                          disabled={!transferTargetId || transferringScope === scope.id}
+                          className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+                        >
+                          {transferringScope === scope.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <ArrowRightLeft className="w-3 h-3" />
+                          )}
+                          Transfer
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end px-5 py-3 border-t border-[var(--border)]">
+              <button
+                onClick={() => setTransferModal(null)}
+                className="px-4 py-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text)] transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

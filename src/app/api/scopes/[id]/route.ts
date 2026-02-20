@@ -5,7 +5,8 @@ import {
   getContacts, getMarketplaceApps, getUPAs, getFeatures, getGaps, getForms,
   getWorkflow, getForecasts, getScopeStats, getCollaborators, getWorkshopQuestions,
   getTrainingQuestions, cloneScope, upsertRow, deleteRow,
-  getWorkflowTechnical, upsertWorkflowTechnical, getCompletionConfig, logActivity
+  getWorkflowTechnical, upsertWorkflowTechnical, getCompletionConfig, logActivity,
+  logAudit, createNotification
 } from "@/lib/scopes";
 import { getDb, saveDb } from "@/lib/db";
 import { generateId } from "@/lib/utils";
@@ -68,6 +69,47 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const { section, data, action } = body;
 
   try {
+    // Capture before state for audit logging
+    let beforeState: any = null;
+    const auditSection = section;
+    const auditAction = action === "delete" ? "delete" : action === "add" ? "add" : "update";
+
+    switch (section) {
+      case "overview":
+        beforeState = await getOverview(id);
+        break;
+      case "contacts":
+        beforeState = await getContacts(id);
+        break;
+      case "marketplace":
+        beforeState = await getMarketplaceApps(id);
+        break;
+      case "features":
+        beforeState = await getFeatures(id);
+        break;
+      case "gaps":
+        beforeState = await getGaps(id);
+        break;
+      case "forms":
+        beforeState = await getForms(id);
+        break;
+      case "training":
+        beforeState = await getTrainingQuestions(id);
+        break;
+      case "workshop":
+        beforeState = await getWorkshopQuestions(id);
+        break;
+      case "forecasts":
+        beforeState = await getForecasts(id);
+        break;
+      case "workflow":
+        beforeState = await getWorkflow(id);
+        break;
+      case "workflow_technical":
+        beforeState = await getWorkflowTechnical(id);
+        break;
+    }
+
     switch (section) {
       case "scope":
         await updateScope(id, data);
@@ -168,7 +210,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       case "forecasts":
         await upsertRow("install_forecasts", { ...data, scope_id: id });
         break;
-      case "workflow":
+      case "workflow": {
         const db = await getDb();
         db.run("UPDATE workflow_integration SET data_json = ? WHERE scope_id = ?", [
           JSON.stringify(data),
@@ -176,6 +218,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         ]);
         saveDb();
         break;
+      }
       case "clone": {
         const newId = await cloneScope(id, session.user.id);
         buildActivityMeta(id).then(m => logActivity(session.user.id, "clone_scope", m)).catch(() => {});
@@ -185,9 +228,65 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         return NextResponse.json({ error: "Unknown section" }, { status: 400 });
     }
 
+    // Capture after state and log audit for tracked sections
+    if (beforeState !== null) {
+      let afterState: any = null;
+      switch (section) {
+        case "overview":
+          afterState = await getOverview(id);
+          break;
+        case "contacts":
+          afterState = await getContacts(id);
+          break;
+        case "marketplace":
+          afterState = await getMarketplaceApps(id);
+          break;
+        case "features":
+          afterState = await getFeatures(id);
+          break;
+        case "gaps":
+          afterState = await getGaps(id);
+          break;
+        case "forms":
+          afterState = await getForms(id);
+          break;
+        case "training":
+          afterState = await getTrainingQuestions(id);
+          break;
+        case "workshop":
+          afterState = await getWorkshopQuestions(id);
+          break;
+        case "forecasts":
+          afterState = await getForecasts(id);
+          break;
+        case "workflow":
+          afterState = await getWorkflow(id);
+          break;
+        case "workflow_technical":
+          afterState = await getWorkflowTechnical(id);
+          break;
+      }
+      logAudit(id, session.user.id, auditSection, auditAction, beforeState, afterState).catch(() => {});
+    }
+
     // Log the update activity
     const actionLabel = action === "delete" ? `delete_${section}` : `update_${section}`;
     buildActivityMeta(id).then(m => logActivity(session.user.id, actionLabel, m)).catch(() => {});
+
+    // Notify scope owner if editor is not the owner
+    try {
+      const scopeDoc = await getScope(id) as any;
+      if (scopeDoc && scopeDoc.owner_id !== session.user.id && section !== "clone") {
+        const userName = session.user.name || "Someone";
+        const fleetName = scopeDoc.fleet_name || "a scope";
+        await createNotification(
+          scopeDoc.owner_id,
+          id,
+          "scope_update",
+          `${userName} updated ${section} on ${fleetName}`
+        );
+      }
+    } catch {}
 
     // Always update scope_documents.updated_at so dashboard reflects recent saves
     const touchDb = await getDb();

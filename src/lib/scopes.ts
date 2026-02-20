@@ -854,6 +854,176 @@ export async function getRecentActivity(limit = 100): Promise<Record<string, unk
   return execToObjects(result);
 }
 
+// ── Admin User Management ─────────────────────────────────────────────
+
+export async function deleteUser(userId: string): Promise<void> {
+  const db = await getDb();
+
+  // Get all scopes owned by this user
+  const ownedScopes = db.exec(
+    "SELECT id FROM scope_documents WHERE owner_id = ?",
+    [userId]
+  );
+  if (ownedScopes.length && ownedScopes[0].values.length) {
+    for (const row of ownedScopes[0].values) {
+      const scopeId = row[0] as string;
+      // Delete all related scope data
+      db.run("DELETE FROM fleet_overview WHERE scope_id = ?", [scopeId]);
+      db.run("DELETE FROM contacts WHERE scope_id = ?", [scopeId]);
+      db.run("DELETE FROM marketplace_apps WHERE scope_id = ?", [scopeId]);
+      db.run("DELETE FROM user_provided_apps WHERE scope_id = ?", [scopeId]);
+      db.run("DELETE FROM solution_features WHERE scope_id = ?", [scopeId]);
+      db.run("DELETE FROM gaps WHERE scope_id = ?", [scopeId]);
+      db.run("DELETE FROM workshop_questions WHERE scope_id = ?", [scopeId]);
+      db.run("DELETE FROM training_questions WHERE scope_id = ?", [scopeId]);
+      db.run("DELETE FROM scope_forms WHERE scope_id = ?", [scopeId]);
+      db.run("DELETE FROM install_forecasts WHERE scope_id = ?", [scopeId]);
+      db.run("DELETE FROM workflow_integration WHERE scope_id = ?", [scopeId]);
+      db.run("DELETE FROM workflow_technical WHERE scope_id = ?", [scopeId]);
+      db.run("DELETE FROM scope_collaborators WHERE scope_id = ?", [scopeId]);
+      db.run("DELETE FROM scope_documents WHERE id = ?", [scopeId]);
+    }
+  }
+
+  // Delete collaborator entries where this user is a collaborator (not owner)
+  db.run("DELETE FROM scope_collaborators WHERE user_id = ?", [userId]);
+
+  // Delete access log entries
+  db.run("DELETE FROM access_log WHERE user_id = ?", [userId]);
+
+  // Delete the user
+  db.run("DELETE FROM users WHERE id = ?", [userId]);
+
+  saveDb();
+}
+
+// ── Audit Trail ───────────────────────────────────────────────────────
+
+export async function logAudit(
+  scopeId: string,
+  userId: string,
+  section: string,
+  action: string,
+  before: any,
+  after: any
+): Promise<void> {
+  const db = await getDb();
+  db.run(
+    `INSERT INTO audit_log (id, scope_id, user_id, section, action, before_json, after_json, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      generateId(),
+      scopeId,
+      userId,
+      section,
+      action,
+      JSON.stringify(before),
+      JSON.stringify(after),
+      new Date().toISOString(),
+    ]
+  );
+  saveDb();
+}
+
+export async function getAuditLog(
+  scopeId: string,
+  limit = 50
+): Promise<Record<string, unknown>[]> {
+  const db = await getDb();
+  const result = db.exec(
+    `SELECT a.*, u.name as user_name FROM audit_log a
+     JOIN users u ON u.id = a.user_id
+     WHERE a.scope_id = ?
+     ORDER BY a.created_at DESC
+     LIMIT ?`,
+    [scopeId, limit]
+  );
+  return execToObjects(result);
+}
+
+export async function updateUser(
+  userId: string,
+  data: { is_admin?: number; name?: string }
+): Promise<void> {
+  const db = await getDb();
+  const sets: string[] = [];
+  const vals: unknown[] = [];
+
+  if (data.is_admin !== undefined) {
+    sets.push("is_admin = ?");
+    vals.push(data.is_admin);
+  }
+  if (data.name !== undefined) {
+    sets.push("name = ?");
+    vals.push(data.name);
+  }
+
+  if (!sets.length) return;
+
+  vals.push(userId);
+  db.run(`UPDATE users SET ${sets.join(", ")} WHERE id = ?`, vals);
+  saveDb();
+}
+
+export async function transferOwnership(
+  scopeId: string,
+  newOwnerId: string
+): Promise<void> {
+  const db = await getDb();
+
+  // Get current owner
+  const scopeResult = db.exec(
+    "SELECT owner_id FROM scope_documents WHERE id = ?",
+    [scopeId]
+  );
+  if (!scopeResult.length || !scopeResult[0].values.length) {
+    throw new Error("Scope not found");
+  }
+  const oldOwnerId = scopeResult[0].values[0][0] as string;
+
+  // Verify new owner exists
+  const userResult = db.exec("SELECT id FROM users WHERE id = ?", [newOwnerId]);
+  if (!userResult.length || !userResult[0].values.length) {
+    throw new Error("New owner not found");
+  }
+
+  // Update scope_documents owner
+  db.run(
+    "UPDATE scope_documents SET owner_id = ?, updated_at = ? WHERE id = ?",
+    [newOwnerId, new Date().toISOString(), scopeId]
+  );
+
+  // Remove old owner's 'owner' collaborator role
+  db.run(
+    "DELETE FROM scope_collaborators WHERE scope_id = ? AND user_id = ? AND role = 'owner'",
+    [scopeId, oldOwnerId]
+  );
+
+  // Remove any existing collaborator entry for new owner (to avoid duplicates)
+  db.run(
+    "DELETE FROM scope_collaborators WHERE scope_id = ? AND user_id = ?",
+    [scopeId, newOwnerId]
+  );
+
+  // Add new owner as 'owner' collaborator
+  db.run(
+    `INSERT INTO scope_collaborators (id, scope_id, user_id, role, invited_at)
+     VALUES (?, ?, ?, 'owner', ?)`,
+    [generateId(), scopeId, newOwnerId, new Date().toISOString()]
+  );
+
+  saveDb();
+}
+
+export async function getUserScopes(userId: string): Promise<Record<string, unknown>[]> {
+  const db = await getDb();
+  const result = db.exec(
+    "SELECT id, fleet_name FROM scope_documents WHERE owner_id = ? ORDER BY fleet_name",
+    [userId]
+  );
+  return execToObjects(result);
+}
+
 export async function deleteRow(table: string, id: string) {
   if (!ALLOWED_TABLES.has(table)) {
     throw new Error(`Table "${table}" is not allowed`);
@@ -861,4 +1031,326 @@ export async function deleteRow(table: string, id: string) {
   const db = await getDb();
   db.run(`DELETE FROM ${table} WHERE id = ?`, [id]);
   saveDb();
+}
+
+// ── Scope Templates ───────────────────────────────────────────────────
+
+export async function getTemplates(): Promise<any[]> {
+  const db = await getDb();
+  const result = db.exec(
+    `SELECT st.*, u.name as creator_name
+     FROM scope_templates st
+     JOIN users u ON u.id = st.created_by
+     ORDER BY st.created_at DESC`
+  );
+  return execToObjects(result);
+}
+
+export async function getTemplate(id: string): Promise<any> {
+  const db = await getDb();
+  const result = db.exec(
+    `SELECT st.*, u.name as creator_name
+     FROM scope_templates st
+     JOIN users u ON u.id = st.created_by
+     WHERE st.id = ?`,
+    [id]
+  );
+  const rows = execToObjects(result);
+  return rows[0] || null;
+}
+
+export async function createTemplate(
+  name: string,
+  description: string,
+  scopeId: string,
+  userId: string
+): Promise<string> {
+  const db = await getDb();
+  const id = generateId();
+  const now = new Date().toISOString();
+
+  // Snapshot all scope data into template_json
+  const overview = await getOverview(scopeId);
+  const contacts = await getContacts(scopeId);
+  const marketplaceApps = await getMarketplaceApps(scopeId);
+  const upas = await getUPAs(scopeId);
+  const features = await getFeatures(scopeId);
+  const gaps = await getGaps(scopeId);
+  const forms = await getForms(scopeId);
+  const workflow = await getWorkflow(scopeId);
+  const forecasts = await getForecasts(scopeId);
+  const workshop = await getWorkshopQuestions(scopeId);
+  const training = await getTrainingQuestions(scopeId);
+  const wfTech = await getWorkflowTechnical(scopeId);
+
+  const templateJson = JSON.stringify({
+    overview,
+    contacts,
+    marketplace_apps: marketplaceApps,
+    upas,
+    features,
+    gaps,
+    forms,
+    workflow,
+    forecasts,
+    workshop,
+    training,
+    workflow_technical: wfTech,
+  });
+
+  db.run(
+    `INSERT INTO scope_templates (id, name, description, template_json, created_by, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [id, name, description || null, templateJson, userId, now]
+  );
+  saveDb();
+  return id;
+}
+
+export async function deleteTemplate(id: string): Promise<void> {
+  const db = await getDb();
+  db.run("DELETE FROM scope_templates WHERE id = ?", [id]);
+  saveDb();
+}
+
+export async function createScopeFromTemplate(
+  templateId: string,
+  fleetName: string,
+  ownerId: string
+): Promise<string> {
+  const template = await getTemplate(templateId);
+  if (!template) throw new Error("Template not found");
+
+  const data = JSON.parse(template.template_json as string);
+
+  // Create the scope with defaults
+  const scopeId = await createScope(ownerId, fleetName);
+  const db = await getDb();
+
+  // Helper to strip old ids/scope_ids and insert rows
+  function insertRows(table: string, rows: any[]) {
+    if (!rows || !rows.length) return;
+    for (const row of rows) {
+      const newRow = { ...row };
+      delete newRow.id;
+      newRow.scope_id = scopeId;
+      const cols = Object.keys(newRow);
+      const placeholders = cols.map(() => "?").join(", ");
+      const vals = cols.map((c) => newRow[c]);
+      db.run(
+        `INSERT INTO ${table} (id, ${cols.join(", ")}) VALUES (?, ${placeholders})`,
+        [generateId(), ...vals]
+      );
+    }
+  }
+
+  // Apply overview data
+  if (data.overview) {
+    const ov = { ...data.overview };
+    delete ov.id;
+    delete ov.scope_id;
+    delete ov.fleet_name;
+    const sets: string[] = [];
+    const vals: unknown[] = [];
+    for (const [key, val] of Object.entries(ov)) {
+      if (val !== null && val !== undefined) {
+        sets.push(`${key} = ?`);
+        vals.push(val);
+      }
+    }
+    if (sets.length) {
+      vals.push(scopeId);
+      db.run(`UPDATE fleet_overview SET ${sets.join(", ")} WHERE scope_id = ?`, vals);
+    }
+  }
+
+  // Replace seeded contacts with template contacts
+  if (data.contacts && data.contacts.length) {
+    db.run("DELETE FROM contacts WHERE scope_id = ?", [scopeId]);
+    insertRows("contacts", data.contacts);
+  }
+
+  // Replace seeded features with template features
+  if (data.features && data.features.length) {
+    db.run("DELETE FROM solution_features WHERE scope_id = ?", [scopeId]);
+    insertRows("solution_features", data.features);
+  }
+
+  // Replace seeded forecasts with template forecasts
+  if (data.forecasts && data.forecasts.length) {
+    db.run("DELETE FROM install_forecasts WHERE scope_id = ?", [scopeId]);
+    insertRows("install_forecasts", data.forecasts);
+  }
+
+  // Insert marketplace apps
+  if (data.marketplace_apps && data.marketplace_apps.length) {
+    insertRows("marketplace_apps", data.marketplace_apps);
+  }
+
+  // Insert user-provided apps
+  if (data.upas && data.upas.length) {
+    insertRows("user_provided_apps", data.upas);
+  }
+
+  // Insert gaps
+  if (data.gaps && data.gaps.length) {
+    insertRows("gaps", data.gaps);
+  }
+
+  // Insert forms
+  if (data.forms && data.forms.length) {
+    insertRows("scope_forms", data.forms);
+  }
+
+  // Insert workshop questions
+  if (data.workshop && data.workshop.length) {
+    insertRows("workshop_questions", data.workshop);
+  }
+
+  // Insert training questions
+  if (data.training && data.training.length) {
+    insertRows("training_questions", data.training);
+  }
+
+  // Apply workflow integration data
+  if (data.workflow && data.workflow.data_json) {
+    db.run("UPDATE workflow_integration SET data_json = ? WHERE scope_id = ?", [
+      typeof data.workflow.data_json === "string"
+        ? data.workflow.data_json
+        : JSON.stringify(data.workflow.data_json),
+      scopeId,
+    ]);
+  }
+
+  // Apply workflow technical data
+  if (data.workflow_technical) {
+    const wt = { ...data.workflow_technical };
+    delete wt.id;
+    delete wt.scope_id;
+    const hasCols = Object.keys(wt).some((k) => wt[k] !== null && wt[k] !== undefined);
+    if (hasCols) {
+      db.run("INSERT OR REPLACE INTO workflow_technical (id, scope_id) VALUES (?, ?)", [
+        generateId(),
+        scopeId,
+      ]);
+      const sets: string[] = [];
+      const vals: unknown[] = [];
+      for (const [key, val] of Object.entries(wt)) {
+        if (val !== null && val !== undefined) {
+          sets.push(`${key} = ?`);
+          vals.push(val);
+        }
+      }
+      if (sets.length) {
+        vals.push(scopeId);
+        db.run(`UPDATE workflow_technical SET ${sets.join(", ")} WHERE scope_id = ?`, vals);
+      }
+    }
+  }
+
+  saveDb();
+  return scopeId;
+}
+
+// ── Notifications ─────────────────────────────────────────────────────
+
+export async function createNotification(
+  userId: string,
+  scopeId: string,
+  type: string,
+  message: string
+): Promise<void> {
+  const db = await getDb();
+  db.run(
+    `INSERT INTO notifications (id, user_id, scope_id, type, message, read, created_at)
+     VALUES (?, ?, ?, ?, ?, 0, ?)`,
+    [generateId(), userId, scopeId, type, message, new Date().toISOString()]
+  );
+  saveDb();
+}
+
+export async function getNotifications(
+  userId: string,
+  unreadOnly?: boolean
+): Promise<any[]> {
+  const db = await getDb();
+  const where = unreadOnly
+    ? "WHERE n.user_id = ? AND n.read = 0"
+    : "WHERE n.user_id = ?";
+  const result = db.exec(
+    `SELECT n.*, sd.fleet_name
+     FROM notifications n
+     LEFT JOIN scope_documents sd ON sd.id = n.scope_id
+     ${where}
+     ORDER BY n.read ASC, n.created_at DESC
+     LIMIT 50`,
+    [userId]
+  );
+  return execToObjects(result);
+}
+
+export async function markNotificationRead(id: string): Promise<void> {
+  const db = await getDb();
+  db.run("UPDATE notifications SET read = 1 WHERE id = ?", [id]);
+  saveDb();
+}
+
+export async function markAllNotificationsRead(userId: string): Promise<void> {
+  const db = await getDb();
+  db.run("UPDATE notifications SET read = 1 WHERE user_id = ? AND read = 0", [userId]);
+  saveDb();
+}
+
+// ── Comments ──────────────────────────────────────────────────────────
+
+export async function getComments(
+  scopeId: string,
+  section?: string
+): Promise<any[]> {
+  const db = await getDb();
+  const params: unknown[] = [scopeId];
+  let where = "WHERE c.scope_id = ?";
+  if (section) {
+    where += " AND c.section = ?";
+    params.push(section);
+  }
+  const result = db.exec(
+    `SELECT c.*, u.name as user_name
+     FROM scope_comments c
+     JOIN users u ON u.id = c.user_id
+     ${where}
+     ORDER BY c.created_at ASC`,
+    params
+  );
+  return execToObjects(result);
+}
+
+export async function addComment(
+  scopeId: string,
+  userId: string,
+  section: string,
+  text: string
+): Promise<string> {
+  const db = await getDb();
+  const id = generateId();
+  db.run(
+    `INSERT INTO scope_comments (id, scope_id, section, user_id, text, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [id, scopeId, section, userId, text, new Date().toISOString()]
+  );
+  saveDb();
+  return id;
+}
+
+export async function deleteComment(id: string): Promise<void> {
+  const db = await getDb();
+  db.run("DELETE FROM scope_comments WHERE id = ?", [id]);
+  saveDb();
+}
+
+export async function getComment(id: string): Promise<any> {
+  const db = await getDb();
+  const result = db.exec("SELECT * FROM scope_comments WHERE id = ?", [id]);
+  const rows = execToObjects(result);
+  return rows[0] || null;
 }

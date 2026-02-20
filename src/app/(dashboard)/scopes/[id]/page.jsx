@@ -828,10 +828,11 @@ export default function ScopePage() {
         <div className="sticky top-0 z-40 bg-[var(--bg)]/90 backdrop-blur-sm border-b border-[var(--border)] px-8 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h1 className="font-bold text-lg">{TABS.find(t=>t.id===tab)?.label || TABS.flatMap(t=>t.children||[]).find(c=>c.id===tab)?.label}</h1>
-            {saving&&<span className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded animate-pulse">Saving…</span>}
-            {saved&&<span className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded flex items-center gap-1"><Check className="w-3 h-3"/> Saved</span>}
-            {saveErr&&<span className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded">{saveErr}</span>}
+            {saving&&<span className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded animate-pulse flex items-center gap-1"><span className="w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin inline-block"/> Saving...</span>}
+            {saved&&<span className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded flex items-center gap-1 animate-[fadeOut_0.5s_ease-in_1.5s_forwards]"><Check className="w-3 h-3"/> Saved</span>}
+            {saveErr&&<span className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded flex items-center gap-1"><AlertTriangle className="w-3 h-3"/> Error saving</span>}
             {!saving&&!saved&&!saveErr&&canEdit&&<span className="text-[10px] text-[var(--text-muted)]">Changes save automatically</span>}
+            <style>{`@keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }`}</style>
           </div>
           <div className="flex items-center gap-3">
             {!canEdit&&<span className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full" title="Contact the document owner for edit access">Read Only — contact owner for edit access</span>}

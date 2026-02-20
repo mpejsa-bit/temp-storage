@@ -6,9 +6,17 @@ const DB_PATH = process.env.ELECTRON_DATA_DIR
   ? path.join(process.env.ELECTRON_DATA_DIR, "scope.db")
   : path.join(process.cwd(), "data", "scope.db");
 
+const BACKUP_DIR = process.env.ELECTRON_DATA_DIR
+  ? path.join(process.env.ELECTRON_DATA_DIR, "backups")
+  : path.join(process.cwd(), "data", "backups");
+
+const MAX_BACKUPS = 24;
+const BACKUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+
 let db: Database | null = null;
 let saving = false;
 let saveQueued = false;
+let lastBackupTime = 0;
 
 export async function getDb(): Promise<Database> {
   if (db) return db;
@@ -38,6 +46,14 @@ export function saveDb() {
   const dir = path.dirname(DB_PATH);
   fs.mkdir(dir, { recursive: true })
     .then(() => fs.writeFile(DB_PATH, Buffer.from(data)))
+    .then(() => {
+      // Auto-backup if last backup is older than 1 hour
+      const now = Date.now();
+      if (now - lastBackupTime > BACKUP_INTERVAL_MS) {
+        lastBackupTime = now;
+        createBackup().catch((err) => console.error("Auto-backup failed:", err));
+      }
+    })
     .catch((err) => console.error("Failed to save DB:", err))
     .finally(() => {
       saving = false;
@@ -46,6 +62,78 @@ export function saveDb() {
         saveDb();
       }
     });
+}
+
+export async function createBackup(): Promise<string> {
+  await fs.mkdir(BACKUP_DIR, { recursive: true });
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const filename = `scope-${timestamp}.db`;
+  const backupPath = path.join(BACKUP_DIR, filename);
+
+  // Copy current DB file
+  try {
+    const data = await fs.readFile(DB_PATH);
+    await fs.writeFile(backupPath, data);
+  } catch {
+    // If DB_PATH doesn't exist yet, export from in-memory DB
+    if (db) {
+      const data = db.export();
+      await fs.writeFile(backupPath, Buffer.from(data));
+    } else {
+      throw new Error("No database to backup");
+    }
+  }
+
+  // Enforce max backups
+  await pruneBackups();
+
+  return filename;
+}
+
+export async function listBackups(): Promise<{ filename: string; size: number; date: string }[]> {
+  try {
+    await fs.mkdir(BACKUP_DIR, { recursive: true });
+    const files = await fs.readdir(BACKUP_DIR);
+    const backups: { filename: string; size: number; date: string }[] = [];
+
+    for (const file of files) {
+      if (!file.endsWith(".db")) continue;
+      const stat = await fs.stat(path.join(BACKUP_DIR, file));
+      backups.push({
+        filename: file,
+        size: stat.size,
+        date: stat.mtime.toISOString(),
+      });
+    }
+
+    // Sort newest first
+    backups.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return backups;
+  } catch {
+    return [];
+  }
+}
+
+export async function deleteBackup(filename: string): Promise<void> {
+  // Sanitize filename to prevent directory traversal
+  const sanitized = path.basename(filename);
+  if (!sanitized.endsWith(".db")) throw new Error("Invalid backup filename");
+  const backupPath = path.join(BACKUP_DIR, sanitized);
+  await fs.unlink(backupPath);
+}
+
+async function pruneBackups(): Promise<void> {
+  const backups = await listBackups();
+  if (backups.length > MAX_BACKUPS) {
+    // Remove oldest backups (list is sorted newest-first)
+    const toDelete = backups.slice(MAX_BACKUPS);
+    for (const backup of toDelete) {
+      try {
+        await fs.unlink(path.join(BACKUP_DIR, backup.filename));
+      } catch {}
+    }
+  }
 }
 
 function initSchema(db: Database) {
@@ -350,6 +438,45 @@ function initSchema(db: Database) {
       created_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id TEXT PRIMARY KEY,
+      scope_id TEXT NOT NULL REFERENCES scope_documents(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      section TEXT NOT NULL,
+      action TEXT NOT NULL,
+      before_json TEXT,
+      after_json TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS scope_templates (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      template_json TEXT NOT NULL DEFAULT '{}',
+      created_by TEXT NOT NULL REFERENCES users(id),
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS scope_comments (
+      id TEXT PRIMARY KEY,
+      scope_id TEXT NOT NULL REFERENCES scope_documents(id) ON DELETE CASCADE,
+      section TEXT,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      text TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      scope_id TEXT REFERENCES scope_documents(id) ON DELETE CASCADE,
+      type TEXT NOT NULL,
+      message TEXT NOT NULL,
+      read INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS workflow_technical (
       id TEXT PRIMARY KEY,
       scope_id TEXT UNIQUE NOT NULL REFERENCES scope_documents(id) ON DELETE CASCADE,
@@ -504,6 +631,61 @@ function runMigrations(db: Database) {
       saveDb();
     }
   } catch {}
+
+  // Add audit_log table
+  try {
+    db.run(`CREATE TABLE IF NOT EXISTS audit_log (
+      id TEXT PRIMARY KEY,
+      scope_id TEXT NOT NULL REFERENCES scope_documents(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      section TEXT NOT NULL,
+      action TEXT NOT NULL,
+      before_json TEXT,
+      after_json TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    )`);
+  } catch {}
+
+  // Add scope_templates table
+  try {
+    db.run(`CREATE TABLE IF NOT EXISTS scope_templates (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      template_json TEXT NOT NULL DEFAULT '{}',
+      created_by TEXT NOT NULL REFERENCES users(id),
+      created_at TEXT DEFAULT (datetime('now'))
+    )`);
+  } catch {}
+
+  // Add scope_comments table
+  try {
+    db.run(`CREATE TABLE IF NOT EXISTS scope_comments (
+      id TEXT PRIMARY KEY,
+      scope_id TEXT NOT NULL REFERENCES scope_documents(id) ON DELETE CASCADE,
+      section TEXT,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      text TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    )`);
+  } catch {}
+
+  // Add notifications table
+  try {
+    db.run(`CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      scope_id TEXT REFERENCES scope_documents(id) ON DELETE CASCADE,
+      type TEXT NOT NULL,
+      message TEXT NOT NULL,
+      read INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    )`);
+  } catch {}
+
+  // Add 'complete' to status CHECK constraint (migration for existing DBs)
+  // SQLite doesn't support ALTER CHECK, but new inserts of 'complete' will work
+  // because we use the column without strict mode
 
   // Reset any scopes incorrectly set to 'active' back to 'draft'
   // (they were auto-promoted due to unconfigured tabs counting as 100%)
