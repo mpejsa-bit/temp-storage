@@ -344,9 +344,9 @@ export async function getUserRole(scopeId: string, userId: string): Promise<stri
     [scopeId, userId]
   );
   if (!result.length || !result[0].values.length) {
-    // All users can view all scopes
+    // All users can edit all scopes
     const exists = db.exec("SELECT id FROM scope_documents WHERE id = ?", [scopeId]);
-    if (exists.length && exists[0].values.length) return "viewer";
+    if (exists.length && exists[0].values.length) return "editor";
     return null;
   }
   return result[0].values[0][0] as string;
