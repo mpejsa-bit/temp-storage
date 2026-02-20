@@ -595,12 +595,14 @@ function SharingTab({ data, scopeId }) {
 function SummaryTab({ data, onNavigate }) {
   const ov = data.overview || {};
   const contacts = data.contacts || [];
-  const execSponsor = contacts.find(c => c.contact_type === "fleet" && c.role_title?.toLowerCase().includes("sponsor"));
+  const execSponsorContact = contacts.find(c => c.contact_type === "fleet" && c.role_title?.toLowerCase().includes("sponsor"));
+  const execSponsorName = ov.executive_sponsor_name || execSponsorContact?.name;
+  const execSponsorTitle = ov.executive_sponsor_title || execSponsorContact?.title;
   const summaryParts = [];
   if (data.fleet_name) {
     summaryParts.push(`${data.fleet_name} is a ${ov.fleet_size_label || ""} ${ov.type_of_operation || ""} ${ov.current_technology || ""} ${ov.fleet_persona || ""} fleet`);
     if (ov.hq_location) summaryParts.push(`located in ${ov.hq_location}`);
-    if (execSponsor?.name) summaryParts.push(`Their Executive Sponsor is ${execSponsor.name}${execSponsor.title ? ` (${execSponsor.title})` : ""}`);
+    if (execSponsorName) summaryParts.push(`Their Executive Sponsor is ${execSponsorName}${execSponsorTitle ? ` (${execSponsorTitle})` : ""}`);
     if (ov.account_executive) summaryParts.push(`Account Executive: ${ov.account_executive}`);
   }
   const fleetSentence = summaryParts.length > 0 ? summaryParts.join(". ") + "." : "";
@@ -758,9 +760,9 @@ export default function ScopePage() {
     setSaving(false);
     if(r.ok){
       setSaved(true);setTimeout(()=>setSaved(false),2000);
-      // Only re-fetch full data for structural changes (add/delete/bulk).
-      // For inline edits, skip reload to avoid resetting input state mid-typing.
-      if(action==="delete"||action==="bulk"||(!action && !d.id)){await load();}
+      // Re-fetch for structural changes and overview saves (so cross-tab data stays fresh).
+      // Skip reload for other inline edits to avoid resetting input state mid-typing.
+      if(action==="delete"||action==="bulk"||(!action && !d.id)||section==="overview"){await load();}
       loadCompletion();
     }
     else{const e=await r.json().catch(()=>({}));const msg=e.error||"Save failed";setSaveErr(msg);toast(msg,"error");setTimeout(()=>setSaveErr(""),5000);}

@@ -215,6 +215,13 @@ export async function createScope(ownerId: string, fleetName: string) {
     );
   });
 
+  // Seed default fleet contact: Executive Sponsor
+  db.run(
+    `INSERT INTO contacts (id, scope_id, contact_type, role_title, sort_order)
+     VALUES (?, ?, 'fleet', 'Executive Sponsor', 0)`,
+    [generateId(), id]
+  );
+
   saveDb();
   return id;
 }
