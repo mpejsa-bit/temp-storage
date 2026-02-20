@@ -139,7 +139,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       case "marketplace":
         if (action === "add") {
           const db = await getDb();
-          db.run(
+          await db.run(
             `INSERT INTO marketplace_apps (id, scope_id, product_name, partner_account, solution_type, partner_category, partner_subcategory, stage, selected)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
             [generateId(), id, data.product_name, data.partner_account, data.solution_type, data.partner_category, data.partner_subcategory, data.stage]
@@ -212,7 +212,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         break;
       case "workflow": {
         const db = await getDb();
-        db.run("UPDATE workflow_integration SET data_json = ? WHERE scope_id = ?", [
+        await db.run("UPDATE workflow_integration SET data_json = ? WHERE scope_id = ?", [
           JSON.stringify(data),
           id,
         ]);
@@ -290,7 +290,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
     // Always update scope_documents.updated_at so dashboard reflects recent saves
     const touchDb = await getDb();
-    touchDb.run("UPDATE scope_documents SET updated_at = ? WHERE id = ?", [new Date().toISOString(), id]);
+    await touchDb.run("UPDATE scope_documents SET updated_at = ? WHERE id = ?", [new Date().toISOString(), id]);
     saveDb();
 
     // Auto-update status based on completion %
@@ -323,7 +323,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         ? "complete"
         : "draft";
       const db2 = await getDb();
-      db2.run("UPDATE scope_documents SET status = ? WHERE id = ?", [newStatus, id]);
+      await db2.run("UPDATE scope_documents SET status = ? WHERE id = ?", [newStatus, id]);
       saveDb();
     } catch {}
 

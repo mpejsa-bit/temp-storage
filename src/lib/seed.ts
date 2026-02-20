@@ -330,20 +330,20 @@ const PS_FEATURES = [
 export async function seedDatabase() {
   const db = await getDb();
 
-  const existing = db.exec("SELECT COUNT(*) FROM ref_master_data");
+  const existing = await db.exec("SELECT COUNT(*) FROM ref_master_data");
   if (existing.length && (existing[0].values[0][0] as number) > 0) return;
 
   for (const [category, values] of Object.entries(MASTER_DATA)) {
-    values.forEach((val, i) => {
-      db.run(
+    for (let i = 0; i < values.length; i++) {
+      await db.run(
         "INSERT INTO ref_master_data (id, category, value, sort_order) VALUES (?, ?, ?, ?)",
-        [generateId(), category, val, i]
+        [generateId(), category, values[i], i]
       );
-    });
+    }
   }
 
   for (const p of SF_MARKETPLACE_PRODUCTS) {
-    db.run(
+    await db.run(
       `INSERT INTO ref_marketplace_products (id, product_name, partner_account, solution_type, partner_category, partner_subcategory, product_description, bd_description, value_proposition, stage)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [generateId(), p.name, p.partner, p.type, p.category, p.subcategory, p.description || "", p.bd_description || "", p.value_prop || "", p.stage]
@@ -351,7 +351,7 @@ export async function seedDatabase() {
   }
 
   for (const a of KM_MARKETPLACE_APPS) {
-    db.run(
+    await db.run(
       `INSERT INTO ref_km_marketplace (id, app_name, category, description) VALUES (?, ?, ?, ?)`,
       [generateId(), a.name, a.category, a.description || ""]
     );

@@ -13,7 +13,7 @@ export async function GET(req: Request) {
   const db = await getDb();
 
   if (table === "masterdata") {
-    const rows = db.exec("SELECT id, category, value, sort_order FROM ref_master_data ORDER BY category, sort_order");
+    const rows = await db.exec("SELECT id, category, value, sort_order FROM ref_master_data ORDER BY category, sort_order");
     const grouped: Record<string, { id: string; value: string; sort_order: number }[]> = {};
     if (rows[0]) {
       for (const r of rows[0].values) {
@@ -29,7 +29,7 @@ export async function GET(req: Request) {
   }
 
   if (table === "sf") {
-    const rows = db.exec(
+    const rows = await db.exec(
       search
         ? `SELECT * FROM ref_marketplace_products WHERE product_name LIKE '%' || ? || '%' OR partner_account LIKE '%' || ? || '%' OR partner_category LIKE '%' || ? || '%' ORDER BY product_name`
         : `SELECT * FROM ref_marketplace_products ORDER BY product_name`,
@@ -45,7 +45,7 @@ export async function GET(req: Request) {
   }
 
   if (table === "km") {
-    const rows = db.exec(
+    const rows = await db.exec(
       search
         ? `SELECT * FROM ref_km_marketplace WHERE app_name LIKE '%' || ? || '%' OR category LIKE '%' || ? || '%' ORDER BY app_name`
         : `SELECT * FROM ref_km_marketplace ORDER BY app_name`,
@@ -78,10 +78,10 @@ export async function POST(req: Request) {
   const id = generateId();
 
   // Get max sort_order for this category
-  const maxRows = db.exec("SELECT MAX(sort_order) FROM ref_master_data WHERE category = ?", [category]);
+  const maxRows = await db.exec("SELECT MAX(sort_order) FROM ref_master_data WHERE category = ?", [category]);
   const maxSort = (maxRows[0]?.values[0]?.[0] as number | null) ?? -1;
 
-  db.run("INSERT INTO ref_master_data (id, category, value, sort_order) VALUES (?, ?, ?, ?)", [
+  await db.run("INSERT INTO ref_master_data (id, category, value, sort_order) VALUES (?, ?, ?, ?)", [
     id, category, value, maxSort + 1,
   ]);
   saveDb();
@@ -101,7 +101,7 @@ export async function PATCH(req: Request) {
   }
 
   const db = await getDb();
-  db.run("UPDATE ref_master_data SET value = ? WHERE id = ?", [value, id]);
+  await db.run("UPDATE ref_master_data SET value = ? WHERE id = ?", [value, id]);
   saveDb();
 
   return NextResponse.json({ ok: true });
@@ -120,7 +120,7 @@ export async function PUT(req: Request) {
 
   const db = await getDb();
   for (let i = 0; i < orderedIds.length; i++) {
-    db.run("UPDATE ref_master_data SET sort_order = ? WHERE id = ? AND category = ?", [i, orderedIds[i], category]);
+    await db.run("UPDATE ref_master_data SET sort_order = ? WHERE id = ? AND category = ?", [i, orderedIds[i], category]);
   }
   saveDb();
 
@@ -139,7 +139,7 @@ export async function DELETE(req: Request) {
   }
 
   const db = await getDb();
-  db.run("DELETE FROM ref_master_data WHERE id = ?", [id]);
+  await db.run("DELETE FROM ref_master_data WHERE id = ?", [id]);
   saveDb();
 
   return NextResponse.json({ ok: true });

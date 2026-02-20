@@ -1,4 +1,4 @@
-import { getDb, saveDb } from "./db";
+import { getDb, saveDb, DbAdapter } from "./db";
 import { generateId, generateShareToken, getFleetSizeLabel } from "./utils";
 import { PS_FEATURES } from "./seed";
 import { encrypt, decrypt } from "./crypto";
@@ -154,41 +154,41 @@ export async function createScope(ownerId: string, fleetName: string) {
   const id = generateId();
   const now = new Date().toISOString();
 
-  db.run(
+  await db.run(
     `INSERT INTO scope_documents (id, owner_id, fleet_name, status, created_at, updated_at)
      VALUES (?, ?, ?, 'draft', ?, ?)`,
     [id, ownerId, fleetName, now, now]
   );
 
-  db.run(
+  await db.run(
     `INSERT INTO scope_collaborators (id, scope_id, user_id, role, invited_at)
      VALUES (?, ?, ?, 'owner', ?)`,
     [generateId(), id, ownerId, now]
   );
 
-  db.run(
+  await db.run(
     `INSERT INTO fleet_overview (id, scope_id, ps_platform) VALUES (?, ?, 'PS Enterprise')`,
     [generateId(), id]
   );
 
-  db.run(
+  await db.run(
     `INSERT INTO workflow_integration (id, scope_id, data_json) VALUES (?, ?, '{}')`,
     [generateId(), id]
   );
 
   // Seed default features
-  PS_FEATURES.forEach((feature, i) => {
-    db.run(
+  for (let i = 0; i < PS_FEATURES.length; i++) {
+    await db.run(
       `INSERT INTO solution_features (id, scope_id, feature_name, needed, sort_order)
        VALUES (?, ?, ?, 0, ?)`,
-      [generateId(), id, feature, i]
+      [generateId(), id, PS_FEATURES[i], i]
     );
-  });
+  }
 
   // Seed install forecasts for 2025 and 2026
   for (const year of [2025, 2026]) {
     for (let month = 1; month <= 12; month++) {
-      db.run(
+      await db.run(
         `INSERT INTO install_forecasts (id, scope_id, year, month, forecasted, actual)
          VALUES (?, ?, ?, ?, 0, 0)`,
         [generateId(), id, year, month]
@@ -207,16 +207,16 @@ export async function createScope(ownerId: string, fleetName: string) {
     "Implementer",
     "Trainer",
   ];
-  psRoles.forEach((role, i) => {
-    db.run(
+  for (let i = 0; i < psRoles.length; i++) {
+    await db.run(
       `INSERT INTO contacts (id, scope_id, contact_type, role_title, sort_order)
        VALUES (?, ?, 'ps_team', ?, ?)`,
-      [generateId(), id, role, i]
+      [generateId(), id, psRoles[i], i]
     );
-  });
+  }
 
   // Seed default fleet contact: Executive Sponsor
-  db.run(
+  await db.run(
     `INSERT INTO contacts (id, scope_id, contact_type, role_title, sort_order)
      VALUES (?, ?, 'fleet', 'Executive Sponsor', 0)`,
     [generateId(), id]
@@ -277,7 +277,7 @@ export async function createScopeWithSfData(
 
   if (overviewUpdates.length) {
     overviewVals.push(id);
-    db.run(
+    await db.run(
       `UPDATE fleet_overview SET ${overviewUpdates.join(", ")} WHERE scope_id = ?`,
       overviewVals
     );
@@ -285,7 +285,7 @@ export async function createScopeWithSfData(
 
   // Update scope_documents with SF account ID
   if (sfData.sf_account_id) {
-    db.run(
+    await db.run(
       "UPDATE scope_documents SET sf_opportunity_id = ? WHERE id = ?",
       [sfData.sf_account_id, id]
     );
@@ -295,7 +295,7 @@ export async function createScopeWithSfData(
   if (sfData.contacts && sfData.contacts.length > 0) {
     for (let i = 0; i < sfData.contacts.length; i++) {
       const c = sfData.contacts[i];
-      db.run(
+      await db.run(
         `INSERT INTO contacts (id, scope_id, contact_type, role_title, name, title, email, phone, sort_order)
          VALUES (?, ?, 'fleet', ?, ?, ?, ?, ?, ?)`,
         [generateId(), id, c.role_title || c.title || "", c.name, c.title, c.email, c.phone, i]
@@ -309,7 +309,7 @@ export async function createScopeWithSfData(
 
 export async function listScopes(userId: string): Promise<ScopeDocument[]> {
   const db = await getDb();
-  const result = db.exec(
+  const result = await db.exec(
     `SELECT sd.*, COALESCE(sc.role, 'editor') as role, u.name as owner_name, u.email as owner_email
      FROM scope_documents sd
      LEFT JOIN scope_collaborators sc ON sc.scope_id = sd.id AND sc.user_id = ?
@@ -322,14 +322,14 @@ export async function listScopes(userId: string): Promise<ScopeDocument[]> {
 
 export async function getScope(scopeId: string) {
   const db = await getDb();
-  const result = db.exec("SELECT * FROM scope_documents WHERE id = ?", [scopeId]);
+  const result = await db.exec("SELECT * FROM scope_documents WHERE id = ?", [scopeId]);
   const rows = execToObjects(result);
   return rows[0] || null;
 }
 
 export async function getScopeByToken(token: string) {
   const db = await getDb();
-  const result = db.exec(
+  const result = await db.exec(
     "SELECT * FROM scope_documents WHERE share_token = ? AND share_access != 'disabled'",
     [token]
   );
@@ -339,13 +339,13 @@ export async function getScopeByToken(token: string) {
 
 export async function getUserRole(scopeId: string, userId: string): Promise<string | null> {
   const db = await getDb();
-  const result = db.exec(
+  const result = await db.exec(
     "SELECT role FROM scope_collaborators WHERE scope_id = ? AND user_id = ?",
     [scopeId, userId]
   );
   if (!result.length || !result[0].values.length) {
     // All users can edit all scopes
-    const exists = db.exec("SELECT id FROM scope_documents WHERE id = ?", [scopeId]);
+    const exists = await db.exec("SELECT id FROM scope_documents WHERE id = ?", [scopeId]);
     if (exists.length && exists[0].values.length) return "editor";
     return null;
   }
@@ -368,13 +368,13 @@ export async function updateScope(scopeId: string, data: Record<string, unknown>
   vals.push(new Date().toISOString());
   vals.push(scopeId);
 
-  db.run(`UPDATE scope_documents SET ${sets.join(", ")} WHERE id = ?`, vals);
+  await db.run(`UPDATE scope_documents SET ${sets.join(", ")} WHERE id = ?`, vals);
   saveDb();
 }
 
 export async function deleteScope(scopeId: string) {
   const db = await getDb();
-  db.run("DELETE FROM scope_documents WHERE id = ?", [scopeId]);
+  await db.run("DELETE FROM scope_documents WHERE id = ?", [scopeId]);
   saveDb();
 }
 
@@ -389,15 +389,15 @@ export async function cloneScope(scopeId: string, newOwnerId: string): Promise<s
   );
 
   // Helper: copy rows from a table, generating new IDs and replacing scope_id
-  function copyRows(table: string, query: string, params: unknown[]) {
-    const result = db.exec(query, params);
+  async function copyRows(table: string, query: string, params: unknown[]) {
+    const result = await db.exec(query, params);
     if (!result.length) return;
     const cols = result[0].columns.filter((c) => c !== "id" && c !== "scope_id");
     for (const row of result[0].values) {
       const obj = rowToObj(result[0].columns, row);
       const placeholders = cols.map(() => "?").join(", ");
       const vals = cols.map((c) => obj[c]);
-      db.run(
+      await db.run(
         `INSERT INTO ${table} (id, scope_id, ${cols.join(", ")}) VALUES (?, ?, ${placeholders})`,
         [generateId(), newId, ...vals]
       );
@@ -405,8 +405,8 @@ export async function cloneScope(scopeId: string, newOwnerId: string): Promise<s
   }
 
   // Helper: copy single-row table by updating existing row
-  function copySingleRow(table: string, scopeKey = "scope_id") {
-    const result = db.exec(`SELECT * FROM ${table} WHERE ${scopeKey} = ?`, [scopeId]);
+  async function copySingleRow(table: string, scopeKey = "scope_id") {
+    const result = await db.exec(`SELECT * FROM ${table} WHERE ${scopeKey} = ?`, [scopeId]);
     if (!result.length || !result[0].values.length) return;
     const obj = rowToObj(result[0].columns, result[0].values[0]);
     const cols = result[0].columns.filter((c) => c !== "id" && c !== scopeKey);
@@ -414,33 +414,33 @@ export async function cloneScope(scopeId: string, newOwnerId: string): Promise<s
     const setStr = cols.map((c) => `${c} = ?`).join(", ");
     const vals = cols.map((c) => obj[c]);
     vals.push(newId);
-    db.run(`UPDATE ${table} SET ${setStr} WHERE ${scopeKey} = ?`, vals);
+    await db.run(`UPDATE ${table} SET ${setStr} WHERE ${scopeKey} = ?`, vals);
   }
 
-  copySingleRow("fleet_overview");
-  copyRows("contacts", "SELECT * FROM contacts WHERE scope_id = ? AND contact_type = 'fleet'", [scopeId]);
-  copyRows("user_provided_apps", "SELECT * FROM user_provided_apps WHERE scope_id = ?", [scopeId]);
-  copyRows("marketplace_apps", "SELECT * FROM marketplace_apps WHERE scope_id = ?", [scopeId]);
+  await copySingleRow("fleet_overview");
+  await copyRows("contacts", "SELECT * FROM contacts WHERE scope_id = ? AND contact_type = 'fleet'", [scopeId]);
+  await copyRows("user_provided_apps", "SELECT * FROM user_provided_apps WHERE scope_id = ?", [scopeId]);
+  await copyRows("marketplace_apps", "SELECT * FROM marketplace_apps WHERE scope_id = ?", [scopeId]);
 
   // Replace seeded defaults with source data
-  db.run("DELETE FROM solution_features WHERE scope_id = ?", [newId]);
-  copyRows("solution_features", "SELECT * FROM solution_features WHERE scope_id = ?", [scopeId]);
+  await db.run("DELETE FROM solution_features WHERE scope_id = ?", [newId]);
+  await copyRows("solution_features", "SELECT * FROM solution_features WHERE scope_id = ?", [scopeId]);
 
-  copyRows("gaps", "SELECT * FROM gaps WHERE scope_id = ?", [scopeId]);
-  copyRows("workshop_questions", "SELECT * FROM workshop_questions WHERE scope_id = ?", [scopeId]);
-  copyRows("training_questions", "SELECT * FROM training_questions WHERE scope_id = ?", [scopeId]);
-  copyRows("scope_forms", "SELECT * FROM scope_forms WHERE scope_id = ?", [scopeId]);
+  await copyRows("gaps", "SELECT * FROM gaps WHERE scope_id = ?", [scopeId]);
+  await copyRows("workshop_questions", "SELECT * FROM workshop_questions WHERE scope_id = ?", [scopeId]);
+  await copyRows("training_questions", "SELECT * FROM training_questions WHERE scope_id = ?", [scopeId]);
+  await copyRows("scope_forms", "SELECT * FROM scope_forms WHERE scope_id = ?", [scopeId]);
 
-  db.run("DELETE FROM install_forecasts WHERE scope_id = ?", [newId]);
-  copyRows("install_forecasts", "SELECT * FROM install_forecasts WHERE scope_id = ?", [scopeId]);
+  await db.run("DELETE FROM install_forecasts WHERE scope_id = ?", [newId]);
+  await copyRows("install_forecasts", "SELECT * FROM install_forecasts WHERE scope_id = ?", [scopeId]);
 
-  copySingleRow("workflow_integration");
+  await copySingleRow("workflow_integration");
 
   // Copy workflow technical (insert row first if needed)
-  const wfTech = db.exec("SELECT * FROM workflow_technical WHERE scope_id = ?", [scopeId]);
+  const wfTech = await db.exec("SELECT * FROM workflow_technical WHERE scope_id = ?", [scopeId]);
   if (wfTech.length && wfTech[0].values.length) {
-    db.run("INSERT OR REPLACE INTO workflow_technical (id, scope_id) VALUES (?, ?)", [generateId(), newId]);
-    copySingleRow("workflow_technical");
+    await db.run("INSERT INTO workflow_technical (id, scope_id) VALUES (?, ?) ON CONFLICT (scope_id) DO NOTHING", [generateId(), newId]);
+    await copySingleRow("workflow_technical");
   }
 
   saveDb();
@@ -450,7 +450,7 @@ export async function cloneScope(scopeId: string, newOwnerId: string): Promise<s
 export async function enableSharing(scopeId: string) {
   const db = await getDb();
   const token = generateShareToken();
-  db.run(
+  await db.run(
     "UPDATE scope_documents SET share_token = ?, share_access = 'viewer', updated_at = ? WHERE id = ?",
     [token, new Date().toISOString(), scopeId]
   );
@@ -460,7 +460,7 @@ export async function enableSharing(scopeId: string) {
 
 export async function disableSharing(scopeId: string) {
   const db = await getDb();
-  db.run(
+  await db.run(
     "UPDATE scope_documents SET share_access = 'disabled', updated_at = ? WHERE id = ?",
     [new Date().toISOString(), scopeId]
   );
@@ -469,7 +469,7 @@ export async function disableSharing(scopeId: string) {
 
 export async function getOverview(scopeId: string) {
   const db = await getDb();
-  const result = db.exec("SELECT * FROM fleet_overview WHERE scope_id = ?", [scopeId]);
+  const result = await db.exec("SELECT * FROM fleet_overview WHERE scope_id = ?", [scopeId]);
   return execToObjects(result)[0] || null;
 }
 
@@ -487,11 +487,11 @@ export async function updateOverview(scopeId: string, data: Record<string, unkno
   }
   if (!sets.length) return;
   vals.push(scopeId);
-  db.run(`UPDATE fleet_overview SET ${sets.join(", ")} WHERE scope_id = ?`, vals);
+  await db.run(`UPDATE fleet_overview SET ${sets.join(", ")} WHERE scope_id = ?`, vals);
 
   // Update fleet_name on scope_documents if fleet name changed via overview
   if (data.fleet_name) {
-    db.run("UPDATE scope_documents SET fleet_name = ?, updated_at = ? WHERE id = ?", [
+    await db.run("UPDATE scope_documents SET fleet_name = ?, updated_at = ? WHERE id = ?", [
       data.fleet_name,
       new Date().toISOString(),
       scopeId,
@@ -501,7 +501,7 @@ export async function updateOverview(scopeId: string, data: Record<string, unkno
   // Compute fleet size label
   if (data.num_tractors !== undefined) {
     const label = getFleetSizeLabel(data.num_tractors as number);
-    db.run("UPDATE fleet_overview SET fleet_size_label = ? WHERE scope_id = ?", [label, scopeId]);
+    await db.run("UPDATE fleet_overview SET fleet_size_label = ? WHERE scope_id = ?", [label, scopeId]);
   }
 
   saveDb();
@@ -510,49 +510,49 @@ export async function updateOverview(scopeId: string, data: Record<string, unkno
 export async function getContacts(scopeId: string) {
   const db = await getDb();
   return execToObjects(
-    db.exec("SELECT * FROM contacts WHERE scope_id = ? ORDER BY contact_type, sort_order", [scopeId])
+    await db.exec("SELECT * FROM contacts WHERE scope_id = ? ORDER BY contact_type, sort_order", [scopeId])
   );
 }
 
 export async function getMarketplaceApps(scopeId: string) {
   const db = await getDb();
   return execToObjects(
-    db.exec("SELECT * FROM marketplace_apps WHERE scope_id = ? ORDER BY product_name", [scopeId])
+    await db.exec("SELECT * FROM marketplace_apps WHERE scope_id = ? ORDER BY product_name", [scopeId])
   );
 }
 
 export async function getUPAs(scopeId: string) {
   const db = await getDb();
   return execToObjects(
-    db.exec("SELECT * FROM user_provided_apps WHERE scope_id = ? ORDER BY sort_order", [scopeId])
+    await db.exec("SELECT * FROM user_provided_apps WHERE scope_id = ? ORDER BY sort_order", [scopeId])
   );
 }
 
 export async function getFeatures(scopeId: string) {
   const db = await getDb();
   return execToObjects(
-    db.exec("SELECT * FROM solution_features WHERE scope_id = ? ORDER BY sort_order", [scopeId])
+    await db.exec("SELECT * FROM solution_features WHERE scope_id = ? ORDER BY sort_order", [scopeId])
   );
 }
 
 export async function getGaps(scopeId: string) {
   const db = await getDb();
   return execToObjects(
-    db.exec("SELECT * FROM gaps WHERE scope_id = ? ORDER BY sort_order", [scopeId])
+    await db.exec("SELECT * FROM gaps WHERE scope_id = ? ORDER BY sort_order", [scopeId])
   );
 }
 
 export async function getTrainingQuestions(scopeId: string) {
   const db = await getDb();
   return execToObjects(
-    db.exec("SELECT * FROM training_questions WHERE scope_id = ? ORDER BY sort_order", [scopeId])
+    await db.exec("SELECT * FROM training_questions WHERE scope_id = ? ORDER BY sort_order", [scopeId])
   );
 }
 
 export async function getWorkflowTechnical(scopeId: string) {
   const db = await getDb();
   const rows = execToObjects(
-    db.exec("SELECT * FROM workflow_technical WHERE scope_id = ?", [scopeId])
+    await db.exec("SELECT * FROM workflow_technical WHERE scope_id = ?", [scopeId])
   );
   const row = rows[0] || null;
   if (row) {
@@ -588,10 +588,10 @@ export async function upsertWorkflowTechnical(scopeId: string, data: Record<stri
     }
   }
 
-  const existing = db.exec("SELECT id FROM workflow_technical WHERE scope_id = ?", [scopeId]);
+  const existing = await db.exec("SELECT id FROM workflow_technical WHERE scope_id = ?", [scopeId]);
   if (!(existing.length && existing[0].values.length)) {
     const id = generateId();
-    db.run("INSERT INTO workflow_technical (id, scope_id) VALUES (?, ?)", [id, scopeId]);
+    await db.run("INSERT INTO workflow_technical (id, scope_id) VALUES (?, ?)", [id, scopeId]);
   }
 
   const sets: string[] = [];
@@ -602,7 +602,7 @@ export async function upsertWorkflowTechnical(scopeId: string, data: Record<stri
   }
   if (sets.length) {
     vals.push(scopeId);
-    db.run(`UPDATE workflow_technical SET ${sets.join(", ")} WHERE scope_id = ?`, vals);
+    await db.run(`UPDATE workflow_technical SET ${sets.join(", ")} WHERE scope_id = ?`, vals);
   }
   saveDb();
 }
@@ -610,14 +610,14 @@ export async function upsertWorkflowTechnical(scopeId: string, data: Record<stri
 export async function getForms(scopeId: string) {
   const db = await getDb();
   return execToObjects(
-    db.exec("SELECT * FROM scope_forms WHERE scope_id = ? ORDER BY sort_order", [scopeId])
+    await db.exec("SELECT * FROM scope_forms WHERE scope_id = ? ORDER BY sort_order", [scopeId])
   );
 }
 
 export async function getWorkflow(scopeId: string) {
   const db = await getDb();
   const rows = execToObjects(
-    db.exec("SELECT * FROM workflow_integration WHERE scope_id = ?", [scopeId])
+    await db.exec("SELECT * FROM workflow_integration WHERE scope_id = ?", [scopeId])
   );
   return rows[0] || null;
 }
@@ -625,21 +625,21 @@ export async function getWorkflow(scopeId: string) {
 export async function getForecasts(scopeId: string) {
   const db = await getDb();
   return execToObjects(
-    db.exec("SELECT * FROM install_forecasts WHERE scope_id = ? ORDER BY year, month", [scopeId])
+    await db.exec("SELECT * FROM install_forecasts WHERE scope_id = ? ORDER BY year, month", [scopeId])
   );
 }
 
 export async function getWorkshopQuestions(scopeId: string) {
   const db = await getDb();
   return execToObjects(
-    db.exec("SELECT * FROM workshop_questions WHERE scope_id = ? ORDER BY sort_order", [scopeId])
+    await db.exec("SELECT * FROM workshop_questions WHERE scope_id = ? ORDER BY sort_order", [scopeId])
   );
 }
 
 export async function getCollaborators(scopeId: string) {
   const db = await getDb();
   return execToObjects(
-    db.exec(
+    await db.exec(
       `SELECT sc.*, u.name, u.email FROM scope_collaborators sc
        JOIN users u ON u.id = sc.user_id
        WHERE sc.scope_id = ? ORDER BY sc.role`,
@@ -650,14 +650,15 @@ export async function getCollaborators(scopeId: string) {
 
 export async function addCollaborator(scopeId: string, email: string, role: string) {
   const db = await getDb();
-  const userResult = db.exec("SELECT id FROM users WHERE email = ?", [email]);
+  const userResult = await db.exec("SELECT id FROM users WHERE email = ?", [email]);
   if (!userResult.length || !userResult[0].values.length) {
     throw new Error("User not found");
   }
   const userId = userResult[0].values[0][0] as string;
-  db.run(
-    `INSERT OR REPLACE INTO scope_collaborators (id, scope_id, user_id, role, invited_at)
-     VALUES (?, ?, ?, ?, ?)`,
+  await db.run(
+    `INSERT INTO scope_collaborators (id, scope_id, user_id, role, invited_at)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT (scope_id, user_id) DO UPDATE SET role = EXCLUDED.role, invited_at = EXCLUDED.invited_at`,
     [generateId(), scopeId, userId, role, new Date().toISOString()]
   );
   saveDb();
@@ -665,7 +666,7 @@ export async function addCollaborator(scopeId: string, email: string, role: stri
 
 export async function removeCollaborator(scopeId: string, userId: string) {
   const db = await getDb();
-  db.run("DELETE FROM scope_collaborators WHERE scope_id = ? AND user_id = ? AND role != 'owner'", [
+  await db.run("DELETE FROM scope_collaborators WHERE scope_id = ? AND user_id = ? AND role != 'owner'", [
     scopeId,
     userId,
   ]);
@@ -674,14 +675,14 @@ export async function removeCollaborator(scopeId: string, userId: string) {
 
 export async function getScopeStats(scopeId: string) {
   const db = await getDb();
-  const apps = db.exec("SELECT COUNT(*) FROM marketplace_apps WHERE scope_id = ? AND selected = 1", [scopeId]);
-  const upas = db.exec("SELECT COUNT(*) FROM user_provided_apps WHERE scope_id = ?", [scopeId]);
-  const forms = db.exec("SELECT COUNT(*) FROM scope_forms WHERE scope_id = ?", [scopeId]);
-  const gaps = db.exec("SELECT COUNT(*) FROM gaps WHERE scope_id = ? AND gap_identified IS NOT NULL", [scopeId]);
-  const features = db.exec("SELECT COUNT(*) FROM solution_features WHERE scope_id = ? AND needed = 1", [scopeId]);
+  const apps = await db.exec("SELECT COUNT(*) FROM marketplace_apps WHERE scope_id = ? AND selected = 1", [scopeId]);
+  const upas = await db.exec("SELECT COUNT(*) FROM user_provided_apps WHERE scope_id = ?", [scopeId]);
+  const forms = await db.exec("SELECT COUNT(*) FROM scope_forms WHERE scope_id = ?", [scopeId]);
+  const gaps = await db.exec("SELECT COUNT(*) FROM gaps WHERE scope_id = ? AND gap_identified IS NOT NULL", [scopeId]);
+  const features = await db.exec("SELECT COUNT(*) FROM solution_features WHERE scope_id = ? AND needed = 1", [scopeId]);
 
   // Form category breakdown (Stats!B6:B12 = COUNTIF)
-  const catRows = db.exec(
+  const catRows = await db.exec(
     "SELECT form_category, COUNT(*) as cnt FROM scope_forms WHERE scope_id = ? GROUP BY form_category",
     [scopeId]
   );
@@ -704,17 +705,17 @@ export async function getScopeStats(scopeId: string) {
 
 export async function getRefMarketplaceProducts() {
   const db = await getDb();
-  return execToObjects(db.exec("SELECT * FROM ref_marketplace_products ORDER BY product_name"));
+  return execToObjects(await db.exec("SELECT * FROM ref_marketplace_products ORDER BY product_name"));
 }
 
 export async function getRefMasterData(category?: string) {
   const db = await getDb();
   if (category) {
     return execToObjects(
-      db.exec("SELECT * FROM ref_master_data WHERE category = ? ORDER BY sort_order", [category])
+      await db.exec("SELECT * FROM ref_master_data WHERE category = ? ORDER BY sort_order", [category])
     );
   }
-  return execToObjects(db.exec("SELECT * FROM ref_master_data ORDER BY category, sort_order"));
+  return execToObjects(await db.exec("SELECT * FROM ref_master_data ORDER BY category, sort_order"));
 }
 
 // Generic table update helper
@@ -732,9 +733,9 @@ export async function upsertRow(table: string, data: Record<string, unknown>) {
   // Try update first
   if (data.id) {
     const sets = cols.map((c) => `${c} = ?`).join(", ");
-    db.run(`UPDATE ${table} SET ${sets} WHERE id = ?`, [...values, id]);
+    await db.run(`UPDATE ${table} SET ${sets} WHERE id = ?`, [...values, id]);
   } else {
-    db.run(
+    await db.run(
       `INSERT INTO ${table} (id, ${cols.join(", ")}) VALUES (?, ${placeholders})`,
       [id, ...values]
     );
@@ -751,7 +752,7 @@ export interface TabCompletionConfig {
 
 export async function getCompletionConfig(): Promise<Record<string, TabCompletionConfig>> {
   const db = await getDb();
-  const result = db.exec("SELECT tab_key, config_json FROM completion_config");
+  const result = await db.exec("SELECT tab_key, config_json FROM completion_config");
   const config: Record<string, TabCompletionConfig> = {};
   if (result.length) {
     for (const row of result[0].values) {
@@ -770,11 +771,11 @@ export async function upsertCompletionConfig(tabKey: string, tabConfig: TabCompl
   const db = await getDb();
   const configJson = JSON.stringify(tabConfig);
   const now = new Date().toISOString();
-  const existing = db.exec("SELECT id FROM completion_config WHERE tab_key = ?", [tabKey]);
+  const existing = await db.exec("SELECT id FROM completion_config WHERE tab_key = ?", [tabKey]);
   if (existing.length && existing[0].values.length) {
-    db.run("UPDATE completion_config SET config_json = ?, updated_at = ? WHERE tab_key = ?", [configJson, now, tabKey]);
+    await db.run("UPDATE completion_config SET config_json = ?, updated_at = ? WHERE tab_key = ?", [configJson, now, tabKey]);
   } else {
-    db.run("INSERT INTO completion_config (id, tab_key, config_json, updated_at) VALUES (?, ?, ?, ?)", [generateId(), tabKey, configJson, now]);
+    await db.run("INSERT INTO completion_config (id, tab_key, config_json, updated_at) VALUES (?, ?, ?, ?)", [generateId(), tabKey, configJson, now]);
   }
   saveDb();
 }
@@ -782,14 +783,14 @@ export async function upsertCompletionConfig(tabKey: string, tabConfig: TabCompl
 // ── Admin Role ────────────────────────────────────────────────────────
 export async function isUserAdmin(userId: string): Promise<boolean> {
   const db = await getDb();
-  const result = db.exec("SELECT is_admin FROM users WHERE id = ?", [userId]);
+  const result = await db.exec("SELECT is_admin FROM users WHERE id = ?", [userId]);
   if (!result.length || !result[0].values.length) return false;
   return result[0].values[0][0] === 1;
 }
 
 export async function setUserAdmin(userId: string, isAdmin: boolean): Promise<void> {
   const db = await getDb();
-  db.run("UPDATE users SET is_admin = ? WHERE id = ?", [isAdmin ? 1 : 0, userId]);
+  await db.run("UPDATE users SET is_admin = ? WHERE id = ?", [isAdmin ? 1 : 0, userId]);
   saveDb();
 }
 
@@ -799,11 +800,11 @@ export async function recordLogin(userId: string): Promise<void> {
   const db = await getDb();
   const id = generateId();
   const now = new Date().toISOString();
-  db.run(
+  await db.run(
     "INSERT INTO access_log (id, user_id, action, created_at) VALUES (?, ?, 'login', ?)",
     [id, userId, now]
   );
-  db.run("UPDATE users SET last_login_at = ? WHERE id = ?", [now, userId]);
+  await db.run("UPDATE users SET last_login_at = ? WHERE id = ?", [now, userId]);
   saveDb();
 }
 
@@ -820,7 +821,7 @@ export async function logActivity(userId: string, action: string, meta?: string 
   const db = await getDb();
   // Support legacy string-only detail param
   const m: ActivityMeta = typeof meta === "string" ? { detail: meta } : (meta ?? {});
-  db.run(
+  await db.run(
     `INSERT INTO access_log (id, user_id, action, detail, ip_address, city, region, country, user_agent, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [generateId(), userId, action, m.detail ?? null, m.ip ?? null, m.city ?? null, m.region ?? null, m.country ?? null, m.userAgent ?? null, new Date().toISOString()]
@@ -830,20 +831,20 @@ export async function logActivity(userId: string, action: string, meta?: string 
 
 export async function getAllUsers(): Promise<Record<string, unknown>[]> {
   const db = await getDb();
-  const result = db.exec(`
+  const result = await db.exec(`
     SELECT u.id, u.name, u.email, u.is_admin, u.created_at, u.last_login_at,
            COUNT(al.id) as login_count
     FROM users u
     LEFT JOIN access_log al ON al.user_id = u.id AND al.action = 'login'
     GROUP BY u.id
-    ORDER BY u.name COLLATE NOCASE
+    ORDER BY LOWER(u.name)
   `);
   return execToObjects(result);
 }
 
 export async function getRecentActivity(limit = 100): Promise<Record<string, unknown>[]> {
   const db = await getDb();
-  const result = db.exec(
+  const result = await db.exec(
     `SELECT al.id, al.action, al.detail, al.ip_address, al.city, al.region, al.country, al.user_agent, al.created_at, u.name as user_name
      FROM access_log al
      JOIN users u ON u.id = al.user_id
@@ -860,7 +861,7 @@ export async function deleteUser(userId: string): Promise<void> {
   const db = await getDb();
 
   // Get all scopes owned by this user
-  const ownedScopes = db.exec(
+  const ownedScopes = await db.exec(
     "SELECT id FROM scope_documents WHERE owner_id = ?",
     [userId]
   );
@@ -868,31 +869,31 @@ export async function deleteUser(userId: string): Promise<void> {
     for (const row of ownedScopes[0].values) {
       const scopeId = row[0] as string;
       // Delete all related scope data
-      db.run("DELETE FROM fleet_overview WHERE scope_id = ?", [scopeId]);
-      db.run("DELETE FROM contacts WHERE scope_id = ?", [scopeId]);
-      db.run("DELETE FROM marketplace_apps WHERE scope_id = ?", [scopeId]);
-      db.run("DELETE FROM user_provided_apps WHERE scope_id = ?", [scopeId]);
-      db.run("DELETE FROM solution_features WHERE scope_id = ?", [scopeId]);
-      db.run("DELETE FROM gaps WHERE scope_id = ?", [scopeId]);
-      db.run("DELETE FROM workshop_questions WHERE scope_id = ?", [scopeId]);
-      db.run("DELETE FROM training_questions WHERE scope_id = ?", [scopeId]);
-      db.run("DELETE FROM scope_forms WHERE scope_id = ?", [scopeId]);
-      db.run("DELETE FROM install_forecasts WHERE scope_id = ?", [scopeId]);
-      db.run("DELETE FROM workflow_integration WHERE scope_id = ?", [scopeId]);
-      db.run("DELETE FROM workflow_technical WHERE scope_id = ?", [scopeId]);
-      db.run("DELETE FROM scope_collaborators WHERE scope_id = ?", [scopeId]);
-      db.run("DELETE FROM scope_documents WHERE id = ?", [scopeId]);
+      await db.run("DELETE FROM fleet_overview WHERE scope_id = ?", [scopeId]);
+      await db.run("DELETE FROM contacts WHERE scope_id = ?", [scopeId]);
+      await db.run("DELETE FROM marketplace_apps WHERE scope_id = ?", [scopeId]);
+      await db.run("DELETE FROM user_provided_apps WHERE scope_id = ?", [scopeId]);
+      await db.run("DELETE FROM solution_features WHERE scope_id = ?", [scopeId]);
+      await db.run("DELETE FROM gaps WHERE scope_id = ?", [scopeId]);
+      await db.run("DELETE FROM workshop_questions WHERE scope_id = ?", [scopeId]);
+      await db.run("DELETE FROM training_questions WHERE scope_id = ?", [scopeId]);
+      await db.run("DELETE FROM scope_forms WHERE scope_id = ?", [scopeId]);
+      await db.run("DELETE FROM install_forecasts WHERE scope_id = ?", [scopeId]);
+      await db.run("DELETE FROM workflow_integration WHERE scope_id = ?", [scopeId]);
+      await db.run("DELETE FROM workflow_technical WHERE scope_id = ?", [scopeId]);
+      await db.run("DELETE FROM scope_collaborators WHERE scope_id = ?", [scopeId]);
+      await db.run("DELETE FROM scope_documents WHERE id = ?", [scopeId]);
     }
   }
 
   // Delete collaborator entries where this user is a collaborator (not owner)
-  db.run("DELETE FROM scope_collaborators WHERE user_id = ?", [userId]);
+  await db.run("DELETE FROM scope_collaborators WHERE user_id = ?", [userId]);
 
   // Delete access log entries
-  db.run("DELETE FROM access_log WHERE user_id = ?", [userId]);
+  await db.run("DELETE FROM access_log WHERE user_id = ?", [userId]);
 
   // Delete the user
-  db.run("DELETE FROM users WHERE id = ?", [userId]);
+  await db.run("DELETE FROM users WHERE id = ?", [userId]);
 
   saveDb();
 }
@@ -908,7 +909,7 @@ export async function logAudit(
   after: any
 ): Promise<void> {
   const db = await getDb();
-  db.run(
+  await db.run(
     `INSERT INTO audit_log (id, scope_id, user_id, section, action, before_json, after_json, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
@@ -930,7 +931,7 @@ export async function getAuditLog(
   limit = 50
 ): Promise<Record<string, unknown>[]> {
   const db = await getDb();
-  const result = db.exec(
+  const result = await db.exec(
     `SELECT a.*, u.name as user_name FROM audit_log a
      JOIN users u ON u.id = a.user_id
      WHERE a.scope_id = ?
@@ -961,7 +962,7 @@ export async function updateUser(
   if (!sets.length) return;
 
   vals.push(userId);
-  db.run(`UPDATE users SET ${sets.join(", ")} WHERE id = ?`, vals);
+  await db.run(`UPDATE users SET ${sets.join(", ")} WHERE id = ?`, vals);
   saveDb();
 }
 
@@ -972,7 +973,7 @@ export async function transferOwnership(
   const db = await getDb();
 
   // Get current owner
-  const scopeResult = db.exec(
+  const scopeResult = await db.exec(
     "SELECT owner_id FROM scope_documents WHERE id = ?",
     [scopeId]
   );
@@ -982,31 +983,31 @@ export async function transferOwnership(
   const oldOwnerId = scopeResult[0].values[0][0] as string;
 
   // Verify new owner exists
-  const userResult = db.exec("SELECT id FROM users WHERE id = ?", [newOwnerId]);
+  const userResult = await db.exec("SELECT id FROM users WHERE id = ?", [newOwnerId]);
   if (!userResult.length || !userResult[0].values.length) {
     throw new Error("New owner not found");
   }
 
   // Update scope_documents owner
-  db.run(
+  await db.run(
     "UPDATE scope_documents SET owner_id = ?, updated_at = ? WHERE id = ?",
     [newOwnerId, new Date().toISOString(), scopeId]
   );
 
   // Remove old owner's 'owner' collaborator role
-  db.run(
+  await db.run(
     "DELETE FROM scope_collaborators WHERE scope_id = ? AND user_id = ? AND role = 'owner'",
     [scopeId, oldOwnerId]
   );
 
   // Remove any existing collaborator entry for new owner (to avoid duplicates)
-  db.run(
+  await db.run(
     "DELETE FROM scope_collaborators WHERE scope_id = ? AND user_id = ?",
     [scopeId, newOwnerId]
   );
 
   // Add new owner as 'owner' collaborator
-  db.run(
+  await db.run(
     `INSERT INTO scope_collaborators (id, scope_id, user_id, role, invited_at)
      VALUES (?, ?, ?, 'owner', ?)`,
     [generateId(), scopeId, newOwnerId, new Date().toISOString()]
@@ -1017,7 +1018,7 @@ export async function transferOwnership(
 
 export async function getUserScopes(userId: string): Promise<Record<string, unknown>[]> {
   const db = await getDb();
-  const result = db.exec(
+  const result = await db.exec(
     "SELECT id, fleet_name FROM scope_documents WHERE owner_id = ? ORDER BY fleet_name",
     [userId]
   );
@@ -1029,7 +1030,7 @@ export async function deleteRow(table: string, id: string) {
     throw new Error(`Table "${table}" is not allowed`);
   }
   const db = await getDb();
-  db.run(`DELETE FROM ${table} WHERE id = ?`, [id]);
+  await db.run(`DELETE FROM ${table} WHERE id = ?`, [id]);
   saveDb();
 }
 
@@ -1037,7 +1038,7 @@ export async function deleteRow(table: string, id: string) {
 
 export async function getTemplates(): Promise<any[]> {
   const db = await getDb();
-  const result = db.exec(
+  const result = await db.exec(
     `SELECT st.*, u.name as creator_name
      FROM scope_templates st
      JOIN users u ON u.id = st.created_by
@@ -1048,7 +1049,7 @@ export async function getTemplates(): Promise<any[]> {
 
 export async function getTemplate(id: string): Promise<any> {
   const db = await getDb();
-  const result = db.exec(
+  const result = await db.exec(
     `SELECT st.*, u.name as creator_name
      FROM scope_templates st
      JOIN users u ON u.id = st.created_by
@@ -1098,7 +1099,7 @@ export async function createTemplate(
     workflow_technical: wfTech,
   });
 
-  db.run(
+  await db.run(
     `INSERT INTO scope_templates (id, name, description, template_json, created_by, created_at)
      VALUES (?, ?, ?, ?, ?, ?)`,
     [id, name, description || null, templateJson, userId, now]
@@ -1109,7 +1110,7 @@ export async function createTemplate(
 
 export async function deleteTemplate(id: string): Promise<void> {
   const db = await getDb();
-  db.run("DELETE FROM scope_templates WHERE id = ?", [id]);
+  await db.run("DELETE FROM scope_templates WHERE id = ?", [id]);
   saveDb();
 }
 
@@ -1128,7 +1129,7 @@ export async function createScopeFromTemplate(
   const db = await getDb();
 
   // Helper to strip old ids/scope_ids and insert rows
-  function insertRows(table: string, rows: any[]) {
+  async function insertRows(table: string, rows: any[]) {
     if (!rows || !rows.length) return;
     for (const row of rows) {
       const newRow = { ...row };
@@ -1137,7 +1138,7 @@ export async function createScopeFromTemplate(
       const cols = Object.keys(newRow);
       const placeholders = cols.map(() => "?").join(", ");
       const vals = cols.map((c) => newRow[c]);
-      db.run(
+      await db.run(
         `INSERT INTO ${table} (id, ${cols.join(", ")}) VALUES (?, ${placeholders})`,
         [generateId(), ...vals]
       );
@@ -1160,61 +1161,61 @@ export async function createScopeFromTemplate(
     }
     if (sets.length) {
       vals.push(scopeId);
-      db.run(`UPDATE fleet_overview SET ${sets.join(", ")} WHERE scope_id = ?`, vals);
+      await db.run(`UPDATE fleet_overview SET ${sets.join(", ")} WHERE scope_id = ?`, vals);
     }
   }
 
   // Replace seeded contacts with template contacts
   if (data.contacts && data.contacts.length) {
-    db.run("DELETE FROM contacts WHERE scope_id = ?", [scopeId]);
-    insertRows("contacts", data.contacts);
+    await db.run("DELETE FROM contacts WHERE scope_id = ?", [scopeId]);
+    await insertRows("contacts", data.contacts);
   }
 
   // Replace seeded features with template features
   if (data.features && data.features.length) {
-    db.run("DELETE FROM solution_features WHERE scope_id = ?", [scopeId]);
-    insertRows("solution_features", data.features);
+    await db.run("DELETE FROM solution_features WHERE scope_id = ?", [scopeId]);
+    await insertRows("solution_features", data.features);
   }
 
   // Replace seeded forecasts with template forecasts
   if (data.forecasts && data.forecasts.length) {
-    db.run("DELETE FROM install_forecasts WHERE scope_id = ?", [scopeId]);
-    insertRows("install_forecasts", data.forecasts);
+    await db.run("DELETE FROM install_forecasts WHERE scope_id = ?", [scopeId]);
+    await insertRows("install_forecasts", data.forecasts);
   }
 
   // Insert marketplace apps
   if (data.marketplace_apps && data.marketplace_apps.length) {
-    insertRows("marketplace_apps", data.marketplace_apps);
+    await insertRows("marketplace_apps", data.marketplace_apps);
   }
 
   // Insert user-provided apps
   if (data.upas && data.upas.length) {
-    insertRows("user_provided_apps", data.upas);
+    await insertRows("user_provided_apps", data.upas);
   }
 
   // Insert gaps
   if (data.gaps && data.gaps.length) {
-    insertRows("gaps", data.gaps);
+    await insertRows("gaps", data.gaps);
   }
 
   // Insert forms
   if (data.forms && data.forms.length) {
-    insertRows("scope_forms", data.forms);
+    await insertRows("scope_forms", data.forms);
   }
 
   // Insert workshop questions
   if (data.workshop && data.workshop.length) {
-    insertRows("workshop_questions", data.workshop);
+    await insertRows("workshop_questions", data.workshop);
   }
 
   // Insert training questions
   if (data.training && data.training.length) {
-    insertRows("training_questions", data.training);
+    await insertRows("training_questions", data.training);
   }
 
   // Apply workflow integration data
   if (data.workflow && data.workflow.data_json) {
-    db.run("UPDATE workflow_integration SET data_json = ? WHERE scope_id = ?", [
+    await db.run("UPDATE workflow_integration SET data_json = ? WHERE scope_id = ?", [
       typeof data.workflow.data_json === "string"
         ? data.workflow.data_json
         : JSON.stringify(data.workflow.data_json),
@@ -1229,7 +1230,7 @@ export async function createScopeFromTemplate(
     delete wt.scope_id;
     const hasCols = Object.keys(wt).some((k) => wt[k] !== null && wt[k] !== undefined);
     if (hasCols) {
-      db.run("INSERT OR REPLACE INTO workflow_technical (id, scope_id) VALUES (?, ?)", [
+      await db.run("INSERT INTO workflow_technical (id, scope_id) VALUES (?, ?) ON CONFLICT (scope_id) DO NOTHING", [
         generateId(),
         scopeId,
       ]);
@@ -1243,7 +1244,7 @@ export async function createScopeFromTemplate(
       }
       if (sets.length) {
         vals.push(scopeId);
-        db.run(`UPDATE workflow_technical SET ${sets.join(", ")} WHERE scope_id = ?`, vals);
+        await db.run(`UPDATE workflow_technical SET ${sets.join(", ")} WHERE scope_id = ?`, vals);
       }
     }
   }
@@ -1261,7 +1262,7 @@ export async function createNotification(
   message: string
 ): Promise<void> {
   const db = await getDb();
-  db.run(
+  await db.run(
     `INSERT INTO notifications (id, user_id, scope_id, type, message, read, created_at)
      VALUES (?, ?, ?, ?, ?, 0, ?)`,
     [generateId(), userId, scopeId, type, message, new Date().toISOString()]
@@ -1277,7 +1278,7 @@ export async function getNotifications(
   const where = unreadOnly
     ? "WHERE n.user_id = ? AND n.read = 0"
     : "WHERE n.user_id = ?";
-  const result = db.exec(
+  const result = await db.exec(
     `SELECT n.*, sd.fleet_name
      FROM notifications n
      LEFT JOIN scope_documents sd ON sd.id = n.scope_id
@@ -1291,13 +1292,13 @@ export async function getNotifications(
 
 export async function markNotificationRead(id: string): Promise<void> {
   const db = await getDb();
-  db.run("UPDATE notifications SET read = 1 WHERE id = ?", [id]);
+  await db.run("UPDATE notifications SET read = 1 WHERE id = ?", [id]);
   saveDb();
 }
 
 export async function markAllNotificationsRead(userId: string): Promise<void> {
   const db = await getDb();
-  db.run("UPDATE notifications SET read = 1 WHERE user_id = ? AND read = 0", [userId]);
+  await db.run("UPDATE notifications SET read = 1 WHERE user_id = ? AND read = 0", [userId]);
   saveDb();
 }
 
@@ -1314,7 +1315,7 @@ export async function getComments(
     where += " AND c.section = ?";
     params.push(section);
   }
-  const result = db.exec(
+  const result = await db.exec(
     `SELECT c.*, u.name as user_name
      FROM scope_comments c
      JOIN users u ON u.id = c.user_id
@@ -1333,7 +1334,7 @@ export async function addComment(
 ): Promise<string> {
   const db = await getDb();
   const id = generateId();
-  db.run(
+  await db.run(
     `INSERT INTO scope_comments (id, scope_id, section, user_id, text, created_at)
      VALUES (?, ?, ?, ?, ?, ?)`,
     [id, scopeId, section, userId, text, new Date().toISOString()]
@@ -1344,13 +1345,13 @@ export async function addComment(
 
 export async function deleteComment(id: string): Promise<void> {
   const db = await getDb();
-  db.run("DELETE FROM scope_comments WHERE id = ?", [id]);
+  await db.run("DELETE FROM scope_comments WHERE id = ?", [id]);
   saveDb();
 }
 
 export async function getComment(id: string): Promise<any> {
   const db = await getDb();
-  const result = db.exec("SELECT * FROM scope_comments WHERE id = ?", [id]);
+  const result = await db.exec("SELECT * FROM scope_comments WHERE id = ?", [id]);
   const rows = execToObjects(result);
   return rows[0] || null;
 }

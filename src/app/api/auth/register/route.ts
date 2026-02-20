@@ -38,7 +38,7 @@ export async function POST(req: Request) {
     await seedDatabase();
     const db = await getDb();
 
-    const existing = db.exec("SELECT id FROM users WHERE email = ?", [trimmedEmail]);
+    const existing = await db.exec("SELECT id FROM users WHERE email = ?", [trimmedEmail]);
     if (existing.length && existing[0].values.length) {
       return NextResponse.json({ error: "Email already registered" }, { status: 409 });
     }
@@ -46,7 +46,7 @@ export async function POST(req: Request) {
     const hash = await bcrypt.hash(password, 12);
     const id = generateId();
 
-    db.run(
+    await db.run(
       "INSERT INTO users (id, email, name, password_hash) VALUES (?, ?, ?, ?)",
       [id, trimmedEmail, trimmedName, hash]
     );
