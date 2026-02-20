@@ -2,31 +2,27 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPw, setShowPw] = useState(false);
+  const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!name.trim()) return;
     setError("");
     setLoading(true);
 
     const result = await signIn("credentials", {
-      email,
-      password,
+      name: name.trim(),
       redirect: false,
     });
 
     setLoading(false);
     if (result?.error) {
-      setError("Invalid email or password");
+      setError("Something went wrong. Please try again.");
     } else {
       router.push("/dashboard");
       router.refresh();
@@ -41,8 +37,8 @@ export default function LoginPage() {
             <span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" />
             Solution Scoping Document
           </div>
-          <h1 className="text-3xl font-bold text-[var(--text)] mb-2">Welcome back</h1>
-          <p className="text-[var(--text-secondary)]">Sign in to manage your scoping documents</p>
+          <h1 className="text-3xl font-bold text-[var(--text)] mb-2">Welcome</h1>
+          <p className="text-[var(--text-secondary)]">Enter your name to get started</p>
         </div>
 
         <form onSubmit={handleSubmit} className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-8 space-y-5">
@@ -53,51 +49,25 @@ export default function LoginPage() {
           )}
 
           <div>
-            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Email</label>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Your Name</label>
             <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
               required
+              autoFocus
               className="w-full px-4 py-3 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
-              placeholder="you@company.com"
+              placeholder="e.g. Mark Pejsa"
             />
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-medium text-[var(--text-secondary)]">Password</label>
-              <Link href="/forgot-password" className="text-xs text-blue-400 hover:text-blue-300">Forgot password?</Link>
-            </div>
-            <div className="relative">
-              <input
-                type={showPw ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="w-full px-4 py-3 pr-12 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
-                placeholder="••••••••"
-              />
-              <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text)]">
-                {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
           </div>
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !name.trim()}
             className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-600/50 text-white font-semibold rounded-lg transition"
           >
-            {loading ? "Signing in..." : "Sign in"}
+            {loading ? "Getting started..." : "Get Started"}
           </button>
-
-          <p className="text-center text-sm text-[var(--text-muted)]">
-            Don&apos;t have an account?{" "}
-            <Link href="/register" className="text-blue-400 hover:text-blue-300">
-              Create one
-            </Link>
-          </p>
         </form>
       </div>
     </div>

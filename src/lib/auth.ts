@@ -1,34 +1,43 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { getDb } from "@/lib/db";
-import bcrypt from "bcryptjs";
+import { getDb, saveDb } from "@/lib/db";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
     Credentials({
       name: "credentials",
       credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
+        name: { label: "Name", type: "text" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null;
+        const name = (credentials?.name as string)?.trim();
+        if (!name) return null;
+
         const db = await getDb();
-        const row = db.exec(
-          "SELECT id, email, name, password_hash FROM users WHERE email = ?",
-          [credentials.email as string]
+
+        // Look for existing user by name (case-insensitive)
+        const rows = db.exec(
+          "SELECT id, email, name FROM users WHERE LOWER(name) = LOWER(?)",
+          [name]
         );
-        if (!row.length || !row[0].values.length) return null;
-        const [id, email, name, hash] = row[0].values[0] as string[];
-        const valid = await bcrypt.compare(
-          credentials.password as string,
-          hash
+
+        if (rows.length && rows[0].values.length) {
+          const [id, email, userName] = rows[0].values[0] as string[];
+          const adminRow = db.exec("SELECT is_admin FROM users WHERE id = ?", [id]);
+          const isAdmin = adminRow.length && adminRow[0].values.length ? adminRow[0].values[0][0] === 1 : false;
+          return { id, email, name: userName, is_admin: isAdmin };
+        }
+
+        // Create new user with this name
+        const id = crypto.randomUUID();
+        const email = `${name.toLowerCase().replace(/\s+/g, ".")}@scope.local`;
+        db.run(
+          "INSERT INTO users (id, email, name, password_hash) VALUES (?, ?, ?, ?)",
+          [id, email, name, "none"]
         );
-        if (!valid) return null;
-        // Check admin status
-        const adminRow = db.exec("SELECT is_admin FROM users WHERE id = ?", [id]);
-        const isAdmin = adminRow.length && adminRow[0].values.length ? adminRow[0].values[0][0] === 1 : false;
-        return { id, email, name, is_admin: isAdmin };
+        saveDb();
+
+        return { id, email, name, is_admin: false };
       },
     }),
   ],
