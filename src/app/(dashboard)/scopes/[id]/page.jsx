@@ -805,8 +805,8 @@ export default function ScopePage() {
   };
 
   return (
-    <div className="min-h-screen flex">
-      <aside className="w-60 flex-shrink-0 border-r border-[var(--border)] bg-[var(--bg-secondary)] sticky top-0 h-screen overflow-y-auto">
+    <div className="fixed inset-0 flex">
+      <aside className="w-60 flex-shrink-0 border-r border-[var(--border)] bg-[var(--bg-secondary)] h-full overflow-y-auto">
         <div className="p-4 border-b border-[var(--border)]">
           <button onClick={()=>router.push("/dashboard")} className="flex items-center gap-2 text-sm text-[var(--text-muted)] hover:text-[var(--text)] transition mb-3"><ArrowLeft className="w-4 h-4"/> Dashboard</button>
           <h2 className="font-bold text-[var(--text)] truncate">{data.fleet_name}</h2>
@@ -824,38 +824,40 @@ export default function ScopePage() {
           </div>
         );})}</nav>
       </aside>
-      <main className="flex-1 min-w-0">
-        <div className="sticky top-0 z-40 bg-[var(--bg)]/90 backdrop-blur-sm border-b border-[var(--border)] px-8 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <h1 className="font-bold text-lg">{TABS.find(t=>t.id===tab)?.label || TABS.flatMap(t=>t.children||[]).find(c=>c.id===tab)?.label}</h1>
-            {saving&&<span className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded animate-pulse flex items-center gap-1"><span className="w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin inline-block"/> Saving...</span>}
-            {saved&&<span className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded flex items-center gap-1 animate-[fadeOut_0.5s_ease-in_1.5s_forwards]"><Check className="w-3 h-3"/> Saved</span>}
-            {saveErr&&<span className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded flex items-center gap-1"><AlertTriangle className="w-3 h-3"/> Error saving</span>}
-            {!saving&&!saved&&!saveErr&&canEdit&&<span className="text-[10px] text-[var(--text-muted)]">Changes save automatically</span>}
-            <style>{`@keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }`}</style>
+      <main className="flex-1 min-w-0 h-full flex flex-col">
+        <div className="flex-shrink-0 bg-[var(--bg)] border-b border-[var(--border)]">
+          <div className="px-8 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <h1 className="font-bold text-lg">{TABS.find(t=>t.id===tab)?.label || TABS.flatMap(t=>t.children||[]).find(c=>c.id===tab)?.label}</h1>
+              {saving&&<span className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded animate-pulse flex items-center gap-1"><span className="w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin inline-block"/> Saving...</span>}
+              {saved&&<span className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded flex items-center gap-1 animate-[fadeOut_0.5s_ease-in_1.5s_forwards]"><Check className="w-3 h-3"/> Saved</span>}
+              {saveErr&&<span className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded flex items-center gap-1"><AlertTriangle className="w-3 h-3"/> Error saving</span>}
+              {!saving&&!saved&&!saveErr&&canEdit&&<span className="text-[10px] text-[var(--text-muted)]">Changes save automatically</span>}
+              <style>{`@keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }`}</style>
+            </div>
+            <div className="flex items-center gap-3">
+              {!canEdit&&<span className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full" title="Contact the document owner for edit access">Read Only — contact owner for edit access</span>}
+              <ThemeToggle />
+              <a href={`/api/scopes/${scopeId}/export`} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-600/30 transition-colors"><Download className="w-3.5 h-3.5"/> Export Excel</a>
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            {!canEdit&&<span className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full" title="Contact the document owner for edit access">Read Only — contact owner for edit access</span>}
-            <ThemeToggle />
-            <a href={`/api/scopes/${scopeId}/export`} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-600/30 transition-colors"><Download className="w-3.5 h-3.5"/> Export Excel</a>
-          </div>
+          {completionData && (
+            <div className="px-8 pb-2 max-w-5xl">
+              <CompletionBar percent={completionData.overall} size="md" showLabel label="Scope Completion" />
+            </div>
+          )}
+          {completionData?.tabs?.[tab] && completionData.tabs[tab].total > 0 && (
+            <div className="px-8 pb-3 max-w-5xl">
+              <p className="text-xs text-[var(--text-muted)]">
+                {TABS.find(t=>t.id===tab)?.label || tab}: <span className={`font-semibold ${completionData.tabs[tab].percent>=100?"text-emerald-400":completionData.tabs[tab].percent>=67?"text-cyan-400":completionData.tabs[tab].percent>=34?"text-amber-400":"text-rose-400"}`}>{completionData.tabs[tab].percent}% complete</span> — {completionData.tabs[tab].filled} of {completionData.tabs[tab].total} required items filled
+                {completionData.tabs[tab].missingFields.length > 0 && (
+                  <span className="text-[var(--text-muted)]"> (missing: {completionData.tabs[tab].missingFields.slice(0,5).join(", ")}{completionData.tabs[tab].missingFields.length>5?` +${completionData.tabs[tab].missingFields.length-5} more`:""})</span>
+                )}
+              </p>
+            </div>
+          )}
         </div>
-        {completionData && (
-          <div className="px-8 pt-4 max-w-5xl">
-            <CompletionBar percent={completionData.overall} size="md" showLabel label="Scope Completion" />
-          </div>
-        )}
-        {completionData?.tabs?.[tab] && completionData.tabs[tab].total > 0 && (
-          <div className="px-8 pt-2 max-w-5xl">
-            <p className="text-xs text-[var(--text-muted)]">
-              {TABS.find(t=>t.id===tab)?.label || tab}: <span className={`font-semibold ${completionData.tabs[tab].percent>=100?"text-emerald-400":completionData.tabs[tab].percent>=67?"text-cyan-400":completionData.tabs[tab].percent>=34?"text-amber-400":"text-rose-400"}`}>{completionData.tabs[tab].percent}% complete</span> — {completionData.tabs[tab].filled} of {completionData.tabs[tab].total} required items filled
-              {completionData.tabs[tab].missingFields.length > 0 && (
-                <span className="text-[var(--text-muted)]"> (missing: {completionData.tabs[tab].missingFields.slice(0,5).join(", ")}{completionData.tabs[tab].missingFields.length>5?` +${completionData.tabs[tab].missingFields.length-5} more`:""})</span>
-              )}
-            </p>
-          </div>
-        )}
-        <div className="p-8 max-w-5xl">{renderTab()}</div>
+        <div className="flex-1 overflow-y-auto p-8 max-w-5xl">{renderTab()}</div>
       </main>
     </div>
   );
