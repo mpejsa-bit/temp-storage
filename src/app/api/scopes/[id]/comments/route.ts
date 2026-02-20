@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import {
   getComments, addComment, deleteComment, getComment,
-  getUserRole, isUserAdmin, getScope, createNotification,
+  getUserRole, isUserAdmin, getScope, createNotificationIfEnabled,
 } from "@/lib/scopes";
+import { getDb } from "@/lib/db";
 
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   const session = await auth();
@@ -40,12 +41,46 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     const scope = await getScope(id) as any;
     if (scope && scope.owner_id !== session.user.id) {
       const userName = session.user.name || "Someone";
-      await createNotification(
+      await createNotificationIfEnabled(
         scope.owner_id,
         id,
         "comment",
         `${userName} commented on ${section} in ${scope.fleet_name}`
       );
+    }
+
+    // Handle @mentions - find all @username patterns and notify mentioned users
+    const mentionPattern = /@([A-Za-z0-9_ ]+?)(?=\s|@|$)/g;
+    const mentions = new Set<string>();
+    let match;
+    while ((match = mentionPattern.exec(text.trim())) !== null) {
+      mentions.add(match[1].trim());
+    }
+
+    if (mentions.size > 0) {
+      const db = await getDb();
+      const fleetName = scope?.fleet_name || "a scope";
+      const commenterName = session.user.name || "Someone";
+
+      for (const mentionedName of Array.from(mentions)) {
+        // Look up user by name (case-insensitive)
+        const userResult = await db.exec(
+          "SELECT id FROM users WHERE LOWER(name) = LOWER(?)",
+          [mentionedName]
+        );
+        if (userResult.length && userResult[0].values.length) {
+          const mentionedUserId = userResult[0].values[0][0] as string;
+          // Don't notify yourself
+          if (mentionedUserId !== session.user.id) {
+            await createNotificationIfEnabled(
+              mentionedUserId,
+              id,
+              "mention",
+              `${commenterName} mentioned you in ${fleetName}`
+            );
+          }
+        }
+      }
     }
   } catch {}
 

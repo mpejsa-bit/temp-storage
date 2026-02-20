@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { Plus, Trash2, ClipboardList, ChevronDown, ChevronRight, RotateCcw } from "lucide-react";
+import { Plus, Trash2, ClipboardList, ChevronDown, ChevronRight, RotateCcw, GripVertical } from "lucide-react";
 import { useDebouncedCallback } from "@/hooks/useDebounce";
 import ConfirmDialog from "@/components/ConfirmDialog";
 
@@ -64,6 +64,33 @@ export default function FormsTab({ data, canEdit, onSave }) {
 
   const toggleExpand = (id) => {
     setExpanded(expanded === id ? null : id);
+  };
+
+  // Drag-and-drop reorder
+  const dragIdx = useRef(null);
+  const onDragStart = (e, idx) => {
+    dragIdx.current = idx;
+    e.dataTransfer.effectAllowed = "move";
+    e.currentTarget.style.opacity = "0.5";
+    e.currentTarget.style.border = "1px solid #3b82f6";
+  };
+  const onDragEnd = (e) => {
+    e.currentTarget.style.opacity = "";
+    e.currentTarget.style.border = "";
+    dragIdx.current = null;
+  };
+  const onFormDragOver = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; };
+  const onFormDrop = (e, toIdx) => {
+    e.preventDefault();
+    const from = dragIdx.current;
+    if (from === null || from === toIdx) return;
+    const reordered = [...forms];
+    const [moved] = reordered.splice(from, 1);
+    reordered.splice(toIdx, 0, moved);
+    const updated = reordered.map((f, i) => ({ ...f, sort_order: i }));
+    setForms(updated);
+    updated.forEach(f => onSave("forms", f));
+    dragIdx.current = null;
   };
 
   // Form field builder sub-component
@@ -199,10 +226,11 @@ export default function FormsTab({ data, canEdit, onSave }) {
       ) : (
         <div className="space-y-2">
           {forms.map((form, i) => (
-            <div key={form.id} className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg overflow-hidden hover:border-[#3a4a65] transition">
+            <div key={form.id} className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg overflow-hidden hover:border-[#3a4a65] transition" draggable={canEdit} onDragStart={e=>onDragStart(e,i)} onDragEnd={onDragEnd} onDragOver={onFormDragOver} onDrop={e=>onFormDrop(e,i)}>
               {/* Form header row */}
               <div className="p-4 cursor-pointer" onClick={() => toggleExpand(form.id)}>
                 <div className="flex items-center gap-3">
+                  {canEdit && <span className="cursor-grab active:cursor-grabbing text-[var(--text-muted)] hover:text-[var(--text-secondary)] flex-shrink-0" onClick={e=>e.stopPropagation()} title="Drag to reorder"><GripVertical className="w-4 h-4"/></span>}
                   {expanded === form.id ? <ChevronDown className="w-4 h-4 text-blue-400 flex-shrink-0"/> : <ChevronRight className="w-4 h-4 text-[var(--text-muted)] flex-shrink-0"/>}
                   <span className="text-[var(--text-muted)] text-xs font-mono w-8">{form.form_number || i + 1}</span>
                   {canEdit ? (

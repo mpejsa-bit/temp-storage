@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Users, Copy, X, Plus, Trash2, Building2, Phone, ShoppingBag, Puzzle, AlertTriangle, MessageSquare, GraduationCap, ClipboardList, Workflow, Calendar, BarChart3, Check, Link2, Home, Database, Download, ChevronDown, ExternalLink, ChevronRight } from "lucide-react";
+import { ArrowLeft, Users, Copy, X, Plus, Trash2, Building2, Phone, ShoppingBag, Puzzle, AlertTriangle, MessageSquare, GraduationCap, ClipboardList, Workflow, Calendar, BarChart3, Check, Link2, Home, Database, Download, ChevronDown, ExternalLink, ChevronRight, HelpCircle, GripVertical, Clock, Send, AtSign, Eye, Printer } from "lucide-react";
 import { useDebounce, useDebouncedCallback } from "@/hooks/useDebounce";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { FleetSummary } from "@/components/scope/CrossTabBanner";
@@ -15,6 +15,7 @@ import FormsTabComp from "@/components/scope/FormsTab";
 import MasterDataTab from "@/components/scope/MasterDataTab";
 import CityAutocomplete from "@/components/scope/CityAutocomplete";
 import CompletionBar, { CompletionDot } from "@/components/scope/CompletionBar";
+import FieldHistoryIcon from "@/components/scope/FieldHistory";
 
 function formatPhone(value) {
   const digits = (value||'').replace(/\D/g,'').slice(0,10);
@@ -27,6 +28,17 @@ function formatPhone(value) {
 function isValidEmail(v) {
   if (!v) return true;
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+}
+
+function isValidUrl(v) {
+  if (!v) return true;
+  return /^(https?:\/\/)?[\w.-]+\.[a-z]{2,}(\/\S*)?$/i.test(v);
+}
+
+function isValidPhone(v) {
+  if (!v) return true;
+  const digits = v.replace(/[\s\-().+]/g, '');
+  return /^\d{7,15}$/.test(digits);
 }
 
 function ContactInlineInput({val,onChange,dis,bold,sz}) {
@@ -44,7 +56,13 @@ function ContactEmailInput({val,onChange,dis}) {
 }
 
 function ContactPhoneInput({val,onChange,dis}) {
-  return <input className="bg-transparent border-none text-[var(--text-secondary)] text-sm focus:outline-none" value={formatPhone(val)} onChange={e=>onChange(formatPhone(e.target.value))} disabled={dis} placeholder="(000) 000-0000" size={14}/>;
+  const invalid = val && !isValidPhone(val);
+  return (
+    <div className="relative">
+      <input className={`bg-transparent text-[var(--text-secondary)] text-sm focus:outline-none ${invalid ? "border-b border-red-500 text-red-400" : "border-none"}`} value={formatPhone(val)} onChange={e=>onChange(formatPhone(e.target.value))} disabled={dis} placeholder="(000) 000-0000" size={14}/>
+      {invalid && <span className="absolute -bottom-4 left-0 text-[10px] text-red-400">Invalid phone</span>}
+    </div>
+  );
 }
 
 const TABS = [
@@ -67,14 +85,101 @@ const TABS = [
   { id: "sharing", label: "Sharing & Team", icon: Users },
 ];
 
-function Field({ label, value, onChange, disabled, type="text", options, placeholder, wide, hint, required: isRequired, missing: isMissing }) {
+// ═══ DRAG-AND-DROP REORDER HOOK ═══
+function useDragReorder(items, onReorder) {
+  const dragIdx = useRef(null);
+  const overIdx = useRef(null);
+
+  const onDragStart = (e, idx) => {
+    dragIdx.current = idx;
+    e.dataTransfer.effectAllowed = "move";
+    e.currentTarget.style.opacity = "0.5";
+    e.currentTarget.style.border = "1px solid #3b82f6";
+  };
+  const onDragEnd = (e) => {
+    e.currentTarget.style.opacity = "";
+    e.currentTarget.style.border = "";
+    dragIdx.current = null;
+    overIdx.current = null;
+  };
+  const onDragOver = (e, idx) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    overIdx.current = idx;
+  };
+  const onDrop = (e, idx) => {
+    e.preventDefault();
+    const from = dragIdx.current;
+    const to = idx;
+    if (from === null || from === to) return;
+    const reordered = [...items];
+    const [moved] = reordered.splice(from, 1);
+    reordered.splice(to, 0, moved);
+    onReorder(reordered.map((item, i) => ({ ...item, sort_order: i })));
+    dragIdx.current = null;
+    overIdx.current = null;
+  };
+
+  return { onDragStart, onDragEnd, onDragOver, onDrop };
+}
+
+// ═══ DRAG HANDLE COMPONENT ═══
+function DragHandle({ canEdit, listeners, className="" }) {
+  if (!canEdit) return null;
+  return (
+    <span {...listeners} className={`cursor-grab active:cursor-grabbing text-[var(--text-muted)] hover:text-[var(--text-secondary)] ${className}`} title="Drag to reorder">
+      <GripVertical className="w-4 h-4"/>
+    </span>
+  );
+}
+
+// ═══ KEYBOARD SHORTCUTS HELP ═══
+function KeyboardShortcutsHelp() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const handleClickOutside = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+  const shortcuts = [
+    { keys: "Esc", desc: "Back to dashboard" },
+    { keys: "Ctrl/Cmd + S", desc: "Manual save" },
+    { keys: "1-9", desc: "Switch tab (not in inputs)" },
+    { keys: "?", desc: "Toggle this help" },
+  ];
+  return (
+    <div className="relative" ref={ref}>
+      <button onClick={() => setOpen(p => !p)} className="p-1.5 rounded-lg hover:bg-[var(--bg-secondary)] text-[var(--text-muted)] hover:text-[var(--text)] transition" title="Keyboard shortcuts">
+        <HelpCircle className="w-4 h-4"/>
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-64 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl shadow-xl z-50 p-4">
+          <h4 className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-3">Keyboard Shortcuts</h4>
+          <div className="space-y-2">
+            {shortcuts.map(s => (
+              <div key={s.keys} className="flex items-center justify-between">
+                <kbd className="text-[10px] font-mono bg-[var(--bg)] border border-[var(--border)] rounded px-1.5 py-0.5 text-blue-400">{s.keys}</kbd>
+                <span className="text-xs text-[var(--text-muted)]">{s.desc}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Field({ label, value, onChange, disabled, type="text", options, placeholder, wide, hint, required: isRequired, missing: isMissing, scopeId, fieldKey }) {
   const baseCls = "w-full px-3 py-2 bg-[var(--bg-secondary)] border rounded-lg text-[var(--text)] text-sm placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500 transition disabled:opacity-50";
   const borderCls = isMissing ? "border-amber-500/60" : "border-[var(--border)]";
   const cls = `${baseCls} ${borderCls}`;
   return (
-    <div className={wide?"col-span-2":""}>
+    <div className={`${wide?"col-span-2":""} group/field`}>
       <label className="block text-xs font-medium text-[var(--text-muted)] mb-1.5 uppercase tracking-wider">
         {label}{isRequired && <span className="text-amber-400 ml-1">*</span>}
+        {scopeId && fieldKey && <FieldHistoryIcon scopeId={scopeId} fieldKey={fieldKey}/>}
       </label>
       {hint && <p className="text-[10px] text-[var(--text-muted)] mb-1">{hint}</p>}
       {type==="select"&&options ? <select value={value||""} onChange={e=>onChange(e.target.value)} disabled={disabled} className={cls}><option value="">— Select —</option>{options.map(o=><option key={o} value={o}>{o}</option>)}</select>
@@ -86,23 +191,29 @@ function Field({ label, value, onChange, disabled, type="text", options, placeho
   );
 }
 
-function UrlField({ label, value, onChange, disabled, placeholder }) {
-  const cls = "w-full px-3 py-2 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-[var(--text)] text-sm placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500 transition disabled:opacity-50";
+function UrlField({ label, value, onChange, disabled, placeholder, required: isRequired, missing: isMissing }) {
+  const invalid = value && !isValidUrl(value);
+  const baseCls = "w-full px-3 py-2 bg-[var(--bg-secondary)] border rounded-lg text-[var(--text)] text-sm placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500 transition disabled:opacity-50";
+  const borderCls = invalid ? "border-red-500/60" : isMissing ? "border-amber-500/60" : "border-[var(--border)]";
+  const cls = `${baseCls} ${borderCls}`;
   return (
     <div>
-      <label className="block text-xs font-medium text-[var(--text-muted)] mb-1.5 uppercase tracking-wider">{label}</label>
+      <label className="block text-xs font-medium text-[var(--text-muted)] mb-1.5 uppercase tracking-wider">
+        {label}{isRequired && <span className="text-amber-400 ml-1">*</span>}
+      </label>
       <div className="flex gap-2">
         <input type="text" value={value||""} onChange={e=>onChange(e.target.value)} disabled={disabled} className={cls} placeholder={placeholder||"https://..."}/>
         {value && <a href={value.startsWith("http")?value:`https://${value}`} target="_blank" rel="noopener noreferrer" className="flex items-center px-2 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-blue-400 hover:text-blue-300" onClick={e=>e.stopPropagation()}><ExternalLink className="w-4 h-4"/></a>}
       </div>
+      {invalid && <span className="text-[10px] text-red-400 mt-0.5 block">Invalid URL format</span>}
     </div>
   );
 }
 
-function OverviewTab({ data, canEdit, onSave, refData, requiredFields=[], missingFields=[] }) {
+function OverviewTab({ data, canEdit, onSave, refData, requiredFields=[], missingFields=[], scopeId }) {
   const reqSet = new Set(requiredFields);
   const missSet = new Set(missingFields);
-  const fp = (key) => ({ required: reqSet.has(key), missing: missSet.has(key) });
+  const fp = (key) => ({ required: reqSet.has(key), missing: missSet.has(key), scopeId, fieldKey: key });
   const today = new Date().toLocaleDateString("en-US",{month:"2-digit",day:"2-digit",year:"numeric"});
   const initOv = (o) => ({...o, date_lead_provided: o?.date_lead_provided || today});
   const [ov, setOv] = useState(initOv(data.overview||{}));
@@ -152,10 +263,10 @@ function OverviewTab({ data, canEdit, onSave, refData, requiredFields=[], missin
         <div className="grid grid-cols-2 gap-4">
           <Field label="Account Executive" value={ov.account_executive} onChange={v=>set("account_executive",v)} disabled={!canEdit} {...fp("account_executive")}/>
           <Field label="Date Lead Provided" value={ov.date_lead_provided} onChange={v=>set("date_lead_provided",v)} disabled={!canEdit} placeholder="MM/DD/YYYY"/>
-          <UrlField label="Contract Link" value={ov.contract_link} onChange={v=>set("contract_link",v)} disabled={!canEdit}/>
-          <UrlField label="SF Opportunity Link" value={ov.sf_opportunity_link} onChange={v=>set("sf_opportunity_link",v)} disabled={!canEdit}/>
-          <UrlField label="Master Notes" value={ov.master_notes_link} onChange={v=>set("master_notes_link",v)} disabled={!canEdit}/>
-          <UrlField label="Customer Dossier" value={ov.customer_dossier_link} onChange={v=>set("customer_dossier_link",v)} disabled={!canEdit}/>
+          <UrlField label="Contract Link" value={ov.contract_link} onChange={v=>set("contract_link",v)} disabled={!canEdit} {...fp("contract_link")}/>
+          <UrlField label="SF Opportunity Link" value={ov.sf_opportunity_link} onChange={v=>set("sf_opportunity_link",v)} disabled={!canEdit} {...fp("sf_opportunity_link")}/>
+          <UrlField label="Master Notes" value={ov.master_notes_link} onChange={v=>set("master_notes_link",v)} disabled={!canEdit} {...fp("master_notes_link")}/>
+          <UrlField label="Customer Dossier" value={ov.customer_dossier_link} onChange={v=>set("customer_dossier_link",v)} disabled={!canEdit} {...fp("customer_dossier_link")}/>
         </div>
       </section>
       {/* Hardware Overview (rows 47-58) */}
@@ -179,7 +290,7 @@ function OverviewTab({ data, canEdit, onSave, refData, requiredFields=[], missin
       {/* Vehicle Breakdown (rows 59-91) */}
       <section><h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">Vehicle Breakdown</h3>
         <div className="grid grid-cols-2 gap-4 mb-4">
-          <UrlField label="Vehicle List Link" value={ov.vehicle_list_link} onChange={v=>set("vehicle_list_link",v)} disabled={!canEdit}/>
+          <UrlField label="Vehicle List Link" value={ov.vehicle_list_link} onChange={v=>set("vehicle_list_link",v)} disabled={!canEdit} {...fp("vehicle_list_link")}/>
         </div>
         <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl overflow-auto">
           <table className="w-full text-sm"><thead><tr className="bg-blue-500/20/50">
@@ -252,6 +363,11 @@ function ContactsTab({ data, canEdit, onSave }) {
 
   const upd = (id,f,v) => setContacts(prev=>prev.map(c=>c.id===id?{...c,[f]:v}:c));
 
+  const fleetDrag = useDragReorder(fleet, (reordered) => {
+    const psContacts = contacts.filter(c=>c.contact_type==="ps_team");
+    setContacts([...psContacts, ...reordered]);
+  });
+
   return (
     <div className="space-y-8">
       <div><h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-2">PS Team</h3>
@@ -272,12 +388,14 @@ function ContactsTab({ data, canEdit, onSave }) {
         {canEdit&&<button onClick={()=>onSave("contacts",{contact_type:"fleet",role_title:"",name:"",sort_order:fleet.length})} className="flex items-center gap-1 text-xs text-blue-400"><Plus className="w-3.5 h-3.5"/> Add</button>}
       </div>
         <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl overflow-hidden"><table className="w-full text-sm"><thead><tr className="bg-blue-500/20/50">
+          {canEdit&&<th className="w-8"/>}
           {["Role","Name","Email","Phone"].map(h=><th key={h} className="text-left px-4 py-3 text-xs text-[var(--text-secondary)] font-semibold">{h}</th>)}
           {canEdit&&<th className="w-10"/>}
         </tr></thead><tbody>
-          {fleet.length===0?<tr><td colSpan={5} className="px-4 py-8 text-center text-[var(--text-muted)] text-sm">No fleet contacts yet</td></tr>:
-          fleet.map(c=>(
-            <tr key={c.id} className="border-t border-[var(--border)]/50 hover:bg-[var(--bg-card)]">
+          {fleet.length===0?<tr><td colSpan={canEdit?6:4} className="px-4 py-8 text-center text-[var(--text-muted)] text-sm">No fleet contacts yet</td></tr>:
+          fleet.map((c,i)=>(
+            <tr key={c.id} className="border-t border-[var(--border)]/50 hover:bg-[var(--bg-card)]" draggable={canEdit} onDragStart={e=>fleetDrag.onDragStart(e,i)} onDragEnd={fleetDrag.onDragEnd} onDragOver={e=>fleetDrag.onDragOver(e,i)} onDrop={e=>fleetDrag.onDrop(e,i)}>
+              {canEdit&&<td className="px-1 py-2"><DragHandle canEdit={canEdit} listeners={{}}/></td>}
               <td className="px-4 py-2"><ContactInlineInput val={c.role_title} onChange={v=>upd(c.id,"role_title",v)} dis={!canEdit} bold/></td>
               <td className="px-4 py-2"><ContactInlineInput val={c.name} onChange={v=>upd(c.id,"name",v)} dis={!canEdit} bold sz={20}/></td>
               <td className="px-4 py-2"><ContactEmailInput val={c.email} onChange={v=>upd(c.id,"email",v)} dis={!canEdit}/></td>
@@ -306,15 +424,24 @@ function SolutionNotesInput({value,onSave,disabled}) {
 }
 
 function SolutionTab({ data, canEdit, onSave }) {
+  const [features, setFeatures] = useState(data.features || []);
+  const prevFeatJson = useRef(JSON.stringify(data.features||[]));
+  useEffect(()=>{const json=JSON.stringify(data.features||[]);if(json!==prevFeatJson.current){prevFeatJson.current=json;setFeatures(data.features||[]);}},[data.features]);
   const toggle=(f,k)=>onSave("features",{...f,[k]:f[k]?0:1});
   const Chk=({val,c="blue"})=>(<div className={`w-5 h-5 rounded border mx-auto flex items-center justify-center ${val?`bg-${c}-600 border-${c}-500`:"bg-[var(--bg)] border-[var(--border)]"}`}>{val?<Check className="w-3 h-3 text-[var(--text)]"/>:null}</div>);
+  const featDrag = useDragReorder(features, (reordered) => {
+    setFeatures(reordered);
+    reordered.forEach(f => onSave("features", f));
+  });
   return (
     <div>
       <div className="bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/20 rounded-xl p-4 mb-6"><p className="text-xs text-blue-300">↑ Platform: <strong>{data.overview?.ps_platform||"—"}</strong> (linked from Overview)</p></div>
       <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl overflow-hidden"><table className="w-full text-sm"><thead><tr className="bg-blue-500/20/50">
+        {canEdit&&<th className="w-8"/>}
         {["Feature","Needed","Quote","Pilot","Production","Notes"].map(h=><th key={h} className={`px-4 py-3 text-xs text-[var(--text-secondary)] font-semibold ${h==="Feature"||h==="Notes"?"text-left":"text-center"} ${h!=="Feature"&&h!=="Notes"?"w-20":""}`}>{h}</th>)}
-      </tr></thead><tbody>{data.features.map(f=>(
-        <tr key={f.id} className="border-t border-[var(--border)]/50 hover:bg-[var(--bg-card)]">
+      </tr></thead><tbody>{features.map((f,i)=>(
+        <tr key={f.id} className="border-t border-[var(--border)]/50 hover:bg-[var(--bg-card)]" draggable={canEdit} onDragStart={e=>featDrag.onDragStart(e,i)} onDragEnd={featDrag.onDragEnd} onDragOver={e=>featDrag.onDragOver(e,i)} onDrop={e=>featDrag.onDrop(e,i)}>
+          {canEdit&&<td className="px-1 py-2"><DragHandle canEdit={canEdit} listeners={{}}/></td>}
           <td className="px-4 py-2 font-medium text-[var(--text)]">{f.feature_name}</td>
           <td className="px-4 py-2 text-center cursor-pointer" onClick={()=>canEdit&&toggle(f,"needed")}><Chk val={f.needed}/></td>
           <td className="px-4 py-2 text-center cursor-pointer" onClick={()=>canEdit&&toggle(f,"required_for_quote")}><Chk val={f.required_for_quote} c="emerald"/></td>
@@ -337,6 +464,10 @@ function GapsTab({ data, canEdit, onSave, requiredFields=[], missingFields=[] })
   const reqSet = new Set(requiredFields);
   const missSet = new Set(missingFields);
   const fp = (key) => ({ required: reqSet.has(key), missing: missSet.has(key) });
+  const gapDrag = useDragReorder(gaps, (reordered) => {
+    setGaps(reordered);
+    reordered.forEach(g => debouncedSave("gaps", g));
+  });
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
@@ -346,9 +477,12 @@ function GapsTab({ data, canEdit, onSave, requiredFields=[], missingFields=[] })
       <div className="space-y-4">
         {gaps.length===0?<div className="text-center py-12 text-[var(--text-muted)]">No gaps yet</div>:
         gaps.map((g,i)=>(
-          <div key={g.id} className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-5">
+          <div key={g.id} className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-5" draggable={canEdit} onDragStart={e=>gapDrag.onDragStart(e,i)} onDragEnd={gapDrag.onDragEnd} onDragOver={e=>gapDrag.onDragOver(e,i)} onDrop={e=>gapDrag.onDrop(e,i)}>
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold text-amber-400 bg-amber-500/10 px-2 py-1 rounded">Gap #{i+1}</span>
+              <div className="flex items-center gap-2">
+                {canEdit&&<DragHandle canEdit={canEdit} listeners={{}}/>}
+                <span className="text-xs font-bold text-amber-400 bg-amber-500/10 px-2 py-1 rounded">Gap #{i+1}</span>
+              </div>
               {canEdit&&<button onClick={()=>onSave("gaps",{id:g.id},"delete")} className="text-red-400"><Trash2 className="w-4 h-4"/></button>}
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -370,6 +504,9 @@ function MarketplaceTab({ data, canEdit, onSave }) {
   const [showCatalog, setShowCatalog] = useState(false);
   const [catalog, setCatalog] = useState([]);
   const [catSearch, setCatSearch] = useState("");
+  const [apps, setApps] = useState(data.marketplace_apps || []);
+  const prevAppsJson = useRef(JSON.stringify(data.marketplace_apps||[]));
+  useEffect(()=>{const json=JSON.stringify(data.marketplace_apps||[]);if(json!==prevAppsJson.current){prevAppsJson.current=json;setApps(data.marketplace_apps||[]);}},[data.marketplace_apps]);
   const [upas, setUpas] = useState(data.upas || []);
   const prevUpasJson = useRef(JSON.stringify(data.upas||[]));
   useEffect(()=>{const json=JSON.stringify(data.upas||[]);if(json!==prevUpasJson.current){prevUpasJson.current=json;setUpas(data.upas||[]);}},[data.upas]);
@@ -379,20 +516,30 @@ function MarketplaceTab({ data, canEdit, onSave }) {
   const openCatalog = async () => { setShowCatalog(true); const r = await fetch("/api/ref?table=sf"); const d = await r.json(); setCatalog(d.data || []); };
   const addFromCatalog = async (p) => { await onSave("marketplace", { product_name:p.product_name, partner_account:p.partner_account, solution_type:p.solution_type, partner_category:p.partner_category, partner_subcategory:p.partner_subcategory, stage:p.stage, selected:1 }); setShowCatalog(false); };
   const filteredCatalog = catSearch ? catalog.filter(p => p.product_name?.toLowerCase().includes(catSearch.toLowerCase()) || p.partner_category?.toLowerCase().includes(catSearch.toLowerCase())) : catalog;
+  const appDrag = useDragReorder(apps, (reordered) => {
+    setApps(reordered);
+    reordered.forEach(a => onSave("marketplace", a));
+  });
+  const upaDrag = useDragReorder(upas, (reordered) => {
+    setUpas(reordered);
+    reordered.forEach(u => debouncedSave("upas", u));
+  });
   return (
     <div className="space-y-8">
       <div><div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Marketplace Apps ({data.marketplace_apps.length})</h3>
+        <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider">Marketplace Apps ({apps.length})</h3>
         {canEdit && <button onClick={openCatalog} className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 px-3 py-2 rounded-lg border border-emerald-500/20"><Plus className="w-3.5 h-3.5"/> Add from Catalog</button>}
       </div>
         <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl overflow-auto"><table className="w-full text-sm"><thead><tr className="bg-blue-500/20/50">
+          {canEdit&&<th className="w-8"/>}
           <th className="text-left px-4 py-3 text-xs text-[var(--text-secondary)] font-semibold w-12">Valid</th>
           {["Product","Partner","Category","Stage"].map(h=><th key={h} className="text-left px-4 py-3 text-xs text-[var(--text-secondary)] font-semibold">{h}</th>)}
           {canEdit&&<th className="w-10"/>}
         </tr></thead><tbody>
-          {data.marketplace_apps.length===0?<tr><td colSpan={6} className="px-4 py-8 text-center text-[var(--text-muted)]">No marketplace apps — click Add from SF Catalog</td></tr>:
-          data.marketplace_apps.map(a=>(
-            <tr key={a.id} className="border-t border-[var(--border)]/50 hover:bg-[var(--bg-card)]">
+          {apps.length===0?<tr><td colSpan={canEdit?7:6} className="px-4 py-8 text-center text-[var(--text-muted)]">No marketplace apps — click Add from SF Catalog</td></tr>:
+          apps.map((a,i)=>(
+            <tr key={a.id} className="border-t border-[var(--border)]/50 hover:bg-[var(--bg-card)]" draggable={canEdit} onDragStart={e=>appDrag.onDragStart(e,i)} onDragEnd={appDrag.onDragEnd} onDragOver={e=>appDrag.onDragOver(e,i)} onDrop={e=>appDrag.onDrop(e,i)}>
+              {canEdit&&<td className="px-1 py-2"><DragHandle canEdit={canEdit} listeners={{}}/></td>}
               <td className="px-4 py-2"><span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/15">{a.product_name?"Yes":"No"}</span></td>
               <td className="px-4 py-2 text-[var(--text)] font-medium">{a.product_name}</td>
               <td className="px-4 py-2 text-[var(--text-secondary)]">{a.partner_account}</td>
@@ -426,11 +573,12 @@ function MarketplaceTab({ data, canEdit, onSave }) {
         {canEdit&&<button onClick={()=>onSave("upas",{name:"New App",sort_order:upas.length})} className="flex items-center gap-1 text-xs text-blue-400"><Plus className="w-3.5 h-3.5"/> Add App</button>}
       </div>
         <div className="space-y-3">
-          {upas.map(u=>(
-            <div key={u.id} className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-4">
+          {upas.map((u,i)=>(
+            <div key={u.id} className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-4" draggable={canEdit} onDragStart={e=>upaDrag.onDragStart(e,i)} onDragEnd={upaDrag.onDragEnd} onDragOver={e=>upaDrag.onDragOver(e,i)} onDrop={e=>upaDrag.onDrop(e,i)}>
               <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2 flex items-center gap-2 -mt-1 mb-1">{canEdit&&<DragHandle canEdit={canEdit} listeners={{}}/>}<span className="text-xs text-[var(--text-muted)]">App {i+1}</span></div>
                 <Field label="Name" value={u.name} onChange={v=>updUpa(u.id,"name",v)} disabled={!canEdit}/>
-                <Field label="Website URL" value={u.website_url} onChange={v=>updUpa(u.id,"website_url",v)} disabled={!canEdit}/>
+                <UrlField label="Website URL" value={u.website_url} onChange={v=>updUpa(u.id,"website_url",v)} disabled={!canEdit}/>
                 <Field label="Use Case" value={u.use_case} onChange={v=>updUpa(u.id,"use_case",v)} disabled={!canEdit} wide/>
                 <Field label="Has Deep Link" value={u.has_deeplink} onChange={v=>{setUpas(prev=>prev.map(x=>x.id===u.id?{...x,has_deeplink:v}:x));onSave("upas",{...u,has_deeplink:v});}} disabled={!canEdit} type="checkbox" hint="Can open directly from the platform"/>
                 {canEdit&&<div className="flex justify-end col-span-2"><button onClick={()=>onSave("upas",{id:u.id},"delete")} className="text-xs text-red-400 flex items-center gap-1"><Trash2 className="w-3 h-3"/> Remove</button></div>}
@@ -535,18 +683,44 @@ function StatsTab({ data }) {
   );
 }
 
-function SharingTab({ data, scopeId }) {
-  const [invEmail,setInvEmail]=useState("");
+function SharingTab({ data, scopeId, onReload }) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
   const [invRole,setInvRole]=useState("viewer");
   const [copied,setCopied]=useState(false);
+  const searchTimer = useRef(null);
   const isOwner=data.role==="owner";
   const shareUrl=data.share_token?`${typeof window!=="undefined"?window.location.origin:""}/share/${data.share_token}`:null;
-  const enableShare=async()=>{await fetch(`/api/scopes/${scopeId}/share`,{method:"POST"});window.location.reload();};
-  const disableShare=async()=>{await fetch(`/api/scopes/${scopeId}/share`,{method:"DELETE"});window.location.reload();};
-  const invEmailValid = isValidEmail(invEmail) && invEmail.length > 0;
-  const invite=async()=>{if(!invEmailValid)return;const r=await fetch(`/api/scopes/${scopeId}/collaborators`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:invEmail,role:invRole})});if(r.ok){setInvEmail("");window.location.reload();}else{const d=await r.json();alert(d.error);}};
-  const remove=async(uid)=>{await fetch(`/api/scopes/${scopeId}/collaborators`,{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:uid})});window.location.reload();};
+  const enableShare=async()=>{await fetch(`/api/scopes/${scopeId}/share`,{method:"POST"});onReload();};
+  const disableShare=async()=>{await fetch(`/api/scopes/${scopeId}/share`,{method:"DELETE"});onReload();};
+  const doSearch = (q) => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (!q || q.length < 2) { setSearchResults([]); return; }
+    searchTimer.current = setTimeout(async () => {
+      setSearching(true);
+      try { const r = await fetch(`/api/scopes/${scopeId}/collaborators?search=${encodeURIComponent(q)}`); if (r.ok) setSearchResults(await r.json()); } catch {}
+      setSearching(false);
+    }, 300);
+  };
+  const addFromSearch = async (user) => {
+    const r = await fetch(`/api/scopes/${scopeId}/collaborators`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: user.email, role: invRole }) });
+    if (r.ok) { setSearchQuery(""); setSearchResults([]); onReload(); } else { const d = await r.json(); alert(d.error); }
+  };
+  const inviteDirect = async () => {
+    if (!searchQuery.trim()) return;
+    const body = searchQuery.includes("@") ? { email: searchQuery.trim(), role: invRole } : { name: searchQuery.trim(), role: invRole };
+    const r = await fetch(`/api/scopes/${scopeId}/collaborators`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (r.ok) { setSearchQuery(""); setSearchResults([]); onReload(); } else { const d = await r.json(); alert(d.error); }
+  };
+  const changeRole = async (userId, newRole) => {
+    const r = await fetch(`/api/scopes/${scopeId}/collaborators`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "update_role", user_id: userId, role: newRole }) });
+    if (r.ok) onReload();
+  };
+  const remove=async(uid)=>{await fetch(`/api/scopes/${scopeId}/collaborators`,{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:uid})});onReload();};
   const copyLink=()=>{if(shareUrl){navigator.clipboard.writeText(shareUrl);setCopied(true);setTimeout(()=>setCopied(false),2000);}};
+  const existingIds = new Set(data.collaborators.map(c => c.user_id));
+  const filteredResults = searchResults.filter(u => !existingIds.has(u.id));
   const rc={owner:"text-blue-400 bg-blue-500/10 border-blue-500/20",editor:"text-emerald-400 bg-emerald-500/10 border-emerald-500/20",viewer:"text-amber-400 bg-amber-500/10 border-amber-500/20"};
   return (
     <div className="space-y-8">
@@ -571,22 +745,110 @@ function SharingTab({ data, scopeId }) {
         </div>
       </div>
       <div><h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">Team Members</h3>
-        {isOwner&&<div className="flex gap-3 mb-4">
-          <div className="flex-1 relative">
-            <input value={invEmail} onChange={e=>setInvEmail(e.target.value)} placeholder="Email address" className={`w-full px-4 py-2.5 bg-[var(--bg-secondary)] border rounded-lg text-[var(--text)] text-sm placeholder-[var(--text-muted)] focus:outline-none ${invEmail && !isValidEmail(invEmail) ? "border-red-500 focus:border-red-500" : "border-[var(--border)] focus:border-blue-500"}`}/>
-            {invEmail && !isValidEmail(invEmail) && <span className="absolute -bottom-4 left-1 text-[10px] text-red-400">Invalid email address</span>}
+        {isOwner&&<div className="mb-4">
+          <div className="flex gap-3">
+            <div className="flex-1 relative">
+              <input value={searchQuery} onChange={e=>{setSearchQuery(e.target.value);doSearch(e.target.value);}} placeholder="Search by name or email..." className="w-full px-4 py-2.5 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-[var(--text)] text-sm placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500" onKeyDown={e=>{if(e.key==="Enter")inviteDirect();}}/>
+              {searching&&<span className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"/>}
+              {filteredResults.length>0&&(
+                <div className="absolute left-0 right-0 top-full mt-1 bg-[var(--bg-card)] border border-[var(--border)] rounded-lg shadow-xl z-10 max-h-48 overflow-y-auto">
+                  {filteredResults.map(u=>(
+                    <button key={u.id} onClick={()=>addFromSearch(u)} className="w-full text-left px-4 py-2.5 hover:bg-[var(--bg-secondary)] transition flex items-center justify-between border-b border-[var(--border)] last:border-b-0">
+                      <div><span className="text-sm text-[var(--text)] font-medium">{u.name}</span><span className="text-xs text-[var(--text-muted)] ml-2">{u.email}</span></div>
+                      <Plus className="w-4 h-4 text-blue-400"/>
+                    </button>))}
+                </div>)}
+            </div>
+            <select value={invRole} onChange={e=>setInvRole(e.target.value)} className="px-3 py-2.5 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-[var(--text)] text-sm"><option value="viewer">Viewer</option><option value="editor">Editor</option></select>
+            <button onClick={inviteDirect} disabled={!searchQuery.trim()} className={`px-5 py-2.5 rounded-lg text-sm font-medium ${searchQuery.trim() ? "bg-blue-600 hover:bg-blue-500 text-[var(--text)]" : "bg-blue-600/30 text-[var(--text-muted)] cursor-not-allowed"}`}>Invite</button>
           </div>
-          <select value={invRole} onChange={e=>setInvRole(e.target.value)} className="px-3 py-2.5 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-[var(--text)] text-sm"><option value="viewer">Viewer</option><option value="editor">Editor</option></select>
-          <button onClick={invite} disabled={!invEmailValid} className={`px-5 py-2.5 rounded-lg text-sm font-medium ${invEmailValid ? "bg-blue-600 hover:bg-blue-500 text-[var(--text)]" : "bg-blue-600/30 text-[var(--text-muted)] cursor-not-allowed"}`}>Invite</button>
+          <p className="text-xs text-[var(--text-muted)] mt-2">Search users by name or email. Select from results or press Enter.</p>
         </div>}
         <div className="space-y-2">{data.collaborators.map(c=>(
           <div key={c.id} className="flex items-center justify-between bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg px-4 py-3">
             <div><span className="text-[var(--text)] font-medium text-sm">{c.name}</span><span className="text-[var(--text-muted)] text-sm ml-2">{c.email}</span></div>
             <div className="flex items-center gap-3">
-              <span className={`text-xs px-2 py-0.5 rounded border font-semibold uppercase ${rc[c.role]}`}>{c.role}</span>
-              {isOwner&&c.role!=="owner"&&<button onClick={()=>remove(c.user_id)} className="text-red-400"><X className="w-4 h-4"/></button>}
+              {isOwner&&c.role!=="owner" ? (
+                <select value={c.role} onChange={e=>changeRole(c.user_id,e.target.value)} className={`text-xs px-2 py-0.5 rounded border font-semibold uppercase bg-transparent cursor-pointer ${rc[c.role]}`}><option value="viewer">Viewer</option><option value="editor">Editor</option></select>
+              ) : (
+                <span className={`text-xs px-2 py-0.5 rounded border font-semibold uppercase ${rc[c.role]}`}>{c.role}</span>
+              )}
+              {isOwner&&c.role!=="owner"&&<button onClick={()=>remove(c.user_id)} className="text-red-400 hover:text-red-300"><X className="w-4 h-4"/></button>}
             </div>
           </div>))}</div>
+      </div>
+    </div>
+  );
+}
+
+function CollaboratorModal({ data, scopeId, onClose, onReload }) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [invRole, setInvRole] = useState("viewer");
+  const searchTimer = useRef(null);
+  const doSearch = (q) => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (!q || q.length < 2) { setSearchResults([]); return; }
+    searchTimer.current = setTimeout(async () => {
+      setSearching(true);
+      try { const r = await fetch(`/api/scopes/${scopeId}/collaborators?search=${encodeURIComponent(q)}`); if (r.ok) setSearchResults(await r.json()); } catch {}
+      setSearching(false);
+    }, 300);
+  };
+  const addUser = async (user) => {
+    const r = await fetch(`/api/scopes/${scopeId}/collaborators`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: user.email, role: invRole }) });
+    if (r.ok) { setSearchQuery(""); setSearchResults([]); onReload(); } else { const d = await r.json(); alert(d.error); }
+  };
+  const changeRole = async (userId, newRole) => {
+    const r = await fetch(`/api/scopes/${scopeId}/collaborators`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "update_role", user_id: userId, role: newRole }) });
+    if (r.ok) onReload();
+  };
+  const remove = async (uid) => {
+    await fetch(`/api/scopes/${scopeId}/collaborators`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ user_id: uid }) });
+    onReload();
+  };
+  const existingIds = new Set(data.collaborators.map(c => c.user_id));
+  const filteredResults = searchResults.filter(u => !existingIds.has(u.id));
+  const rc = { owner: "text-blue-400 bg-blue-500/10 border-blue-500/20", editor: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20", viewer: "text-amber-400 bg-amber-500/10 border-amber-500/20" };
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl w-full max-w-lg max-h-[80vh] overflow-hidden" onClick={e=>e.stopPropagation()}>
+        <div className="px-6 py-4 border-b border-[var(--border)] flex items-center justify-between">
+          <h3 className="font-semibold text-[var(--text)]">Manage Team</h3>
+          <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text)]"><X className="w-5 h-5"/></button>
+        </div>
+        <div className="p-6">
+          <div className="flex gap-2 mb-4">
+            <div className="flex-1 relative">
+              <input value={searchQuery} onChange={e=>{setSearchQuery(e.target.value);doSearch(e.target.value);}} placeholder="Search users by name or email..." className="w-full px-3 py-2 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-[var(--text)] text-sm placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500"/>
+              {searching&&<span className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"/>}
+              {filteredResults.length>0&&(
+                <div className="absolute left-0 right-0 top-full mt-1 bg-[var(--bg-card)] border border-[var(--border)] rounded-lg shadow-xl z-10 max-h-40 overflow-y-auto">
+                  {filteredResults.map(u=>(
+                    <button key={u.id} onClick={()=>addUser(u)} className="w-full text-left px-3 py-2 hover:bg-[var(--bg-secondary)] transition flex items-center justify-between border-b border-[var(--border)] last:border-b-0">
+                      <div><span className="text-sm text-[var(--text)] font-medium">{u.name}</span><span className="text-xs text-[var(--text-muted)] ml-2">{u.email}</span></div>
+                      <Plus className="w-4 h-4 text-blue-400"/>
+                    </button>))}
+                </div>)}
+            </div>
+            <select value={invRole} onChange={e=>setInvRole(e.target.value)} className="px-2 py-2 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-[var(--text)] text-xs"><option value="viewer">Viewer</option><option value="editor">Editor</option></select>
+          </div>
+          <div className="space-y-2 max-h-60 overflow-y-auto">
+            {data.collaborators.map(c=>(
+              <div key={c.id} className="flex items-center justify-between bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg px-3 py-2.5">
+                <div className="min-w-0"><span className="text-[var(--text)] font-medium text-sm">{c.name}</span><span className="text-[var(--text-muted)] text-xs ml-2">{c.email}</span></div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {c.role!=="owner" ? (
+                    <select value={c.role} onChange={e=>changeRole(c.user_id,e.target.value)} className={`text-xs px-2 py-0.5 rounded border font-semibold uppercase bg-transparent cursor-pointer ${rc[c.role]}`}><option value="viewer">Viewer</option><option value="editor">Editor</option></select>
+                  ) : (
+                    <span className={`text-xs px-2 py-0.5 rounded border font-semibold uppercase ${rc[c.role]}`}>{c.role}</span>
+                  )}
+                  {c.role!=="owner"&&<button onClick={()=>remove(c.user_id)} className="text-red-400 hover:text-red-300"><X className="w-4 h-4"/></button>}
+                </div>
+              </div>))}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -709,6 +971,137 @@ function PlaceholderTab({ title, desc }) {
   return <div className="text-center py-16"><ClipboardList className="w-12 h-12 mx-auto mb-4 text-[#2a3a55]"/><h3 className="text-lg font-semibold mb-2">{title}</h3><p className="text-sm text-[var(--text-muted)] max-w-md mx-auto">{desc}</p></div>;
 }
 
+// ═══ PRESENCE INDICATOR ═══
+function PresenceIndicator({ scopeId }) {
+  const [viewers, setViewers] = useState([]);
+  const [showTooltip, setShowTooltip] = useState(false);
+  useEffect(() => {
+    if (!scopeId) return;
+    let active = true;
+    const heartbeat = async () => { try { await fetch(`/api/scopes/${scopeId}/presence`, { method: "POST" }); } catch {} };
+    const fetchViewers = async () => { try { const r = await fetch(`/api/scopes/${scopeId}/presence`); if (r.ok && active) setViewers(await r.json()); } catch {} };
+    heartbeat(); fetchViewers();
+    const interval = setInterval(() => { heartbeat(); fetchViewers(); }, 15000);
+    return () => { active = false; clearInterval(interval); };
+  }, [scopeId]);
+  if (viewers.length === 0) return null;
+  const colors = ["bg-emerald-500","bg-blue-500","bg-amber-500","bg-violet-500","bg-cyan-500","bg-rose-500"];
+  return (
+    <div className="relative flex items-center gap-1" onMouseEnter={() => setShowTooltip(true)} onMouseLeave={() => setShowTooltip(false)}>
+      <Eye className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+      <div className="flex -space-x-1.5">
+        {viewers.slice(0,5).map((v,i) => (<div key={v.user_id} className={`w-6 h-6 rounded-full ${colors[i%colors.length]} flex items-center justify-center text-[10px] font-bold text-white border-2 border-[var(--bg)]`} title={v.name}>{(v.name||"?")[0].toUpperCase()}</div>))}
+        {viewers.length > 5 && <div className="w-6 h-6 rounded-full bg-[var(--bg-secondary)] border-2 border-[var(--bg)] flex items-center justify-center text-[9px] text-[var(--text-muted)] font-bold">+{viewers.length-5}</div>}
+      </div>
+      {showTooltip && (
+        <div className="absolute top-full right-0 mt-1 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg shadow-xl p-2 z-50 min-w-[140px]">
+          <p className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider mb-1 px-1">Viewing now</p>
+          {viewers.map(v => <div key={v.user_id} className="text-xs text-[var(--text)] px-1 py-0.5">{v.name}</div>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══ COMMENT SECTION ═══
+function CommentSection({ scopeId, section, canEdit }) {
+  const [comments, setComments] = useState([]);
+  const [text, setText] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [users, setUsers] = useState([]);
+  const [mentionQuery, setMentionQuery] = useState(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const inputRef = useRef(null);
+  const loadComments = useCallback(async () => { try { const r = await fetch(`/api/scopes/${scopeId}/comments?section=${section}`); if (r.ok) setComments(await r.json()); } catch {} }, [scopeId, section]);
+  const loadUsers = useCallback(async () => { try { const r = await fetch("/api/users"); if (r.ok) setUsers(await r.json()); } catch {} }, []);
+  useEffect(() => { if (open) { loadComments(); loadUsers(); } }, [open, loadComments, loadUsers]);
+  const filteredUsers = mentionQuery !== null ? users.filter(u => u.name.toLowerCase().includes(mentionQuery.toLowerCase())).slice(0,6) : [];
+  const handleInput = (e) => {
+    const val = e.target.value; setText(val);
+    const cursorPos = e.target.selectionStart;
+    const textBefore = val.slice(0, cursorPos);
+    const atIdx = textBefore.lastIndexOf("@");
+    if (atIdx !== -1) {
+      const afterAt = textBefore.slice(atIdx + 1);
+      const beforeAt = textBefore.slice(0, atIdx);
+      if (atIdx === 0 || beforeAt.endsWith(" ") || beforeAt.endsWith("\n")) {
+        if (!/\s/.test(afterAt) || afterAt.split(/\s/).length <= 2) { setMentionQuery(afterAt); setMentionIndex(0); return; }
+      }
+    }
+    setMentionQuery(null);
+  };
+  const insertMention = (userName) => {
+    const cursorPos = inputRef.current?.selectionStart || text.length;
+    const textBefore = text.slice(0, cursorPos);
+    const atIdx = textBefore.lastIndexOf("@");
+    setText(`${text.slice(0,atIdx)}@${userName} ${text.slice(cursorPos)}`);
+    setMentionQuery(null); inputRef.current?.focus();
+  };
+  const handleKeyDown = (e) => {
+    if (mentionQuery !== null && filteredUsers.length > 0) {
+      if (e.key === "ArrowDown") { e.preventDefault(); setMentionIndex(i => (i+1)%filteredUsers.length); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); setMentionIndex(i => (i-1+filteredUsers.length)%filteredUsers.length); }
+      else if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); insertMention(filteredUsers[mentionIndex].name); }
+      else if (e.key === "Escape") { setMentionQuery(null); }
+    } else if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitComment(); }
+  };
+  const submitComment = async () => {
+    if (!text.trim() || loading) return; setLoading(true);
+    try { await fetch(`/api/scopes/${scopeId}/comments`, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ section, text: text.trim() }) }); setText(""); await loadComments(); } catch {}
+    setLoading(false);
+  };
+  const deleteCommentById = async (cid) => { try { await fetch(`/api/scopes/${scopeId}/comments`, { method: "DELETE", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ id: cid }) }); await loadComments(); } catch {} };
+  const renderText = (t) => { const parts = t.split(/(@[A-Za-z0-9_ ]+?)(?=\s|@|$)/g); return parts.map((p,i) => p.startsWith("@") ? <span key={i} className="text-blue-400 bg-blue-500/15 px-0.5 rounded font-medium">{p}</span> : <span key={i}>{p}</span>); };
+  const timeAgo = (d) => { const diff = Date.now()-new Date(d).getTime(); const m=Math.floor(diff/60000); if(m<1) return "just now"; if(m<60) return `${m}m ago`; const h=Math.floor(m/60); if(h<24) return `${h}h ago`; return `${Math.floor(h/24)}d ago`; };
+  return (
+    <div className="mt-4">
+      <button onClick={() => setOpen(o => !o)} className="flex items-center gap-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition">
+        <MessageSquare className="w-3.5 h-3.5" />{open ? "Hide" : "Show"} Comments
+        {comments.length > 0 && !open && <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-full">{comments.length}</span>}
+      </button>
+      {open && (
+        <div className="mt-2 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl p-4 space-y-3">
+          {comments.length === 0 && <p className="text-xs text-[var(--text-muted)] text-center py-2">No comments yet</p>}
+          {comments.map(c => (
+            <div key={c.id} className="flex gap-2 group">
+              <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center text-[10px] font-bold text-blue-400 flex-shrink-0 mt-0.5">{(c.user_name||"?")[0].toUpperCase()}</div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-[var(--text)]">{c.user_name}</span>
+                  <span className="text-[10px] text-[var(--text-muted)]">{timeAgo(c.created_at)}</span>
+                  <button onClick={() => deleteCommentById(c.id)} className="opacity-0 group-hover:opacity-100 text-red-400/50 hover:text-red-400 transition-opacity ml-auto"><Trash2 className="w-3 h-3" /></button>
+                </div>
+                <p className="text-xs text-[var(--text-secondary)] mt-0.5 break-words">{renderText(c.text)}</p>
+              </div>
+            </div>
+          ))}
+          {canEdit && (
+            <div className="relative pt-2 border-t border-[var(--border)]/50">
+              <div className="flex gap-2 items-end">
+                <div className="flex-1 relative">
+                  <textarea ref={inputRef} value={text} onChange={handleInput} onKeyDown={handleKeyDown} placeholder="Add a comment... (type @ to mention)" rows={1} className="w-full px-3 py-2 bg-[var(--bg)] border border-[var(--border)] rounded-lg text-[var(--text)] text-xs placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500 resize-none"/>
+                  {mentionQuery !== null && filteredUsers.length > 0 && (
+                    <div className="absolute bottom-full mb-1 left-0 w-56 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg shadow-xl overflow-hidden z-50">
+                      {filteredUsers.map((u,i) => (
+                        <button key={u.id} onMouseDown={(e) => { e.preventDefault(); insertMention(u.name); }} className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 transition ${i===mentionIndex?"bg-blue-500/20 text-blue-400":"text-[var(--text)] hover:bg-[var(--bg-card)]"}`}>
+                          <div className="w-5 h-5 rounded-full bg-blue-500/20 flex items-center justify-center text-[9px] font-bold text-blue-400">{u.name[0].toUpperCase()}</div>
+                          <span>{u.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button onClick={submitComment} disabled={!text.trim()||loading} className="px-3 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-600/30 disabled:text-[var(--text-muted)] text-white rounded-lg transition flex items-center gap-1 text-xs"><Send className="w-3 h-3"/></button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ═══ MAIN PAGE ═══
 export default function ScopePage() {
   const params = useParams();
@@ -724,6 +1117,8 @@ export default function ScopePage() {
 
   const { toast } = useToast();
   const canEdit = data?.role==="owner"||data?.role==="editor";
+  const isOwner = data?.role==="owner";
+  const [showTeamModal, setShowTeamModal] = useState(false);
   const [refData, setRefData] = useState({});
   const [completionData, setCompletionData] = useState(null);
   const [completionConfig, setCompletionConfig] = useState({});
@@ -752,6 +1147,46 @@ export default function ScopePage() {
   useEffect(()=>{if(tab==="overview") loadRef();},[tab, loadRef]);
   useEffect(()=>{loadCompletion();},[loadCompletion]);
   useEffect(()=>{loadCompletionConfig();},[loadCompletionConfig]);
+
+  // ═══ KEYBOARD SHORTCUTS ═══
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      const tag = e.target.tagName;
+      const isTyping = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || e.target.isContentEditable;
+
+      // Ctrl/Cmd + S: manual save (works even in inputs)
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+        return;
+      }
+
+      // Don't fire other shortcuts when typing in inputs
+      if (isTyping) return;
+
+      // Escape: back to dashboard
+      if (e.key === "Escape") {
+        e.preventDefault();
+        router.push("/dashboard");
+        return;
+      }
+
+      // Number keys 1-9: switch tabs
+      const num = parseInt(e.key);
+      if (num >= 1 && num <= 9) {
+        const flatTabs = [];
+        TABS.forEach(t => {
+          if (t.children) { t.children.forEach(c => flatTabs.push(c)); }
+          else { flatTabs.push(t); }
+        });
+        if (num <= flatTabs.length) {
+          e.preventDefault();
+          setTab(flatTabs[num - 1].id);
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [router]);
 
   const [saveErr,setSaveErr] = useState("");
   const save = async(section,d,action)=>{
@@ -785,14 +1220,14 @@ export default function ScopePage() {
   const renderTab = () => {
     switch(tab){
       case "summary": return <SummaryTab data={data} onNavigate={setTab}/>;
-      case "overview": return <OverviewTab data={data} canEdit={canEdit} onSave={save} refData={refData} {...getTabFieldProps("overview")}/>;
+      case "overview": return <OverviewTab data={data} canEdit={canEdit} onSave={save} refData={refData} scopeId={scopeId} {...getTabFieldProps("overview")}/>;
       case "contacts": return <ContactsTab data={data} canEdit={canEdit} onSave={save} {...getTabFieldProps("contacts")}/>;
       case "marketplace": return <MarketplaceTab data={data} canEdit={canEdit} onSave={save} {...getTabFieldProps("marketplace")}/>;
       case "solution": return <><SolutionTab data={data} canEdit={canEdit} onSave={save} {...getTabFieldProps("solution")}/><SolutionLinkedSection data={data}/></>;
       case "gaps": return <GapsTab data={data} canEdit={canEdit} onSave={save} {...getTabFieldProps("gaps")}/>;
       case "install": return <InstallTab data={data} canEdit={canEdit} onSave={save} {...getTabFieldProps("install")}/>;
       case "stats": return <StatsTab data={data}/>;
-      case "sharing": return <SharingTab data={data} scopeId={scopeId}/>;
+      case "sharing": return <SharingTab data={data} scopeId={scopeId} onReload={load}/>;
       case "workshop": return <WorkshopTabComp data={data} canEdit={canEdit} onSave={save}/>;
       case "training": return <TrainingTabComp data={data} canEdit={canEdit} onSave={save}/>;
       case "workflow": return <WorkflowTabComp data={data} canEdit={canEdit} onSave={save}/>;
@@ -829,6 +1264,7 @@ export default function ScopePage() {
           <div className="px-8 py-3 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <h1 className="font-bold text-lg">{TABS.find(t=>t.id===tab)?.label || TABS.flatMap(t=>t.children||[]).find(c=>c.id===tab)?.label}</h1>
+              <PresenceIndicator scopeId={scopeId} />
               {saving&&<span className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded animate-pulse flex items-center gap-1"><span className="w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin inline-block"/> Saving...</span>}
               {saved&&<span className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded flex items-center gap-1 animate-[fadeOut_0.5s_ease-in_1.5s_forwards]"><Check className="w-3 h-3"/> Saved</span>}
               {saveErr&&<span className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded flex items-center gap-1"><AlertTriangle className="w-3 h-3"/> Error saving</span>}
@@ -837,7 +1273,10 @@ export default function ScopePage() {
             </div>
             <div className="flex items-center gap-3">
               {!canEdit&&<span className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full" title="Contact the document owner for edit access">Read Only — contact owner for edit access</span>}
+              {isOwner&&<button onClick={()=>setShowTeamModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-600/30 transition-colors"><Users className="w-3.5 h-3.5"/> Team</button>}
+              <KeyboardShortcutsHelp />
               <ThemeToggle />
+              <a href={`/api/scopes/${scopeId}/print`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-600/30 transition-colors"><Printer className="w-3.5 h-3.5"/> Print PDF</a>
               <a href={`/api/scopes/${scopeId}/export`} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-600/30 transition-colors"><Download className="w-3.5 h-3.5"/> Export Excel</a>
             </div>
           </div>
@@ -857,8 +1296,14 @@ export default function ScopePage() {
             </div>
           )}
         </div>
-        <div className="flex-1 overflow-y-auto p-8 max-w-5xl">{renderTab()}</div>
+        <div className="flex-1 overflow-y-auto p-8 max-w-5xl">
+          {renderTab()}
+          {["overview","contacts","marketplace","solution","gaps","workshop","training","forms","install","workflow"].includes(tab) && (
+            <CommentSection scopeId={scopeId} section={tab} canEdit={canEdit} />
+          )}
+        </div>
       </main>
+      {showTeamModal&&<CollaboratorModal data={data} scopeId={scopeId} onClose={()=>setShowTeamModal(false)} onReload={load}/>}
     </div>
   );
 }

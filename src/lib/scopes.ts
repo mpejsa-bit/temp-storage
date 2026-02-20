@@ -309,11 +309,31 @@ export async function createScopeWithSfData(
 
 export async function listScopes(userId: string): Promise<ScopeDocument[]> {
   const db = await getDb();
+  // Check if user is admin
+  const adminResult = await db.exec("SELECT is_admin FROM users WHERE id = ?", [userId]);
+  const isAdmin = adminResult.length && adminResult[0].values.length && adminResult[0].values[0][0] === 1;
+
+  if (isAdmin) {
+    // Admins see all scopes with editor role (unless they have a specific collaborator role)
+    const result = await db.exec(
+      `SELECT sd.*, COALESCE(sc.role, 'editor') as role, u.name as owner_name, u.email as owner_email, fo.account_temperature
+       FROM scope_documents sd
+       LEFT JOIN scope_collaborators sc ON sc.scope_id = sd.id AND sc.user_id = ?
+       JOIN users u ON u.id = sd.owner_id
+       LEFT JOIN fleet_overview fo ON fo.scope_id = sd.id
+       ORDER BY sd.updated_at DESC`,
+      [userId]
+    );
+    return execToObjects(result) as unknown as ScopeDocument[];
+  }
+
+  // Non-admins only see scopes where they are a collaborator
   const result = await db.exec(
-    `SELECT sd.*, COALESCE(sc.role, 'editor') as role, u.name as owner_name, u.email as owner_email
+    `SELECT sd.*, sc.role, u.name as owner_name, u.email as owner_email, fo.account_temperature
      FROM scope_documents sd
-     LEFT JOIN scope_collaborators sc ON sc.scope_id = sd.id AND sc.user_id = ?
+     JOIN scope_collaborators sc ON sc.scope_id = sd.id AND sc.user_id = ?
      JOIN users u ON u.id = sd.owner_id
+     LEFT JOIN fleet_overview fo ON fo.scope_id = sd.id
      ORDER BY sd.updated_at DESC`,
     [userId]
   );
@@ -344,9 +364,12 @@ export async function getUserRole(scopeId: string, userId: string): Promise<stri
     [scopeId, userId]
   );
   if (!result.length || !result[0].values.length) {
-    // All users can edit all scopes
-    const exists = await db.exec("SELECT id FROM scope_documents WHERE id = ?", [scopeId]);
-    if (exists.length && exists[0].values.length) return "editor";
+    // Check if user is an admin — admins get editor access to all scopes
+    const adminResult = await db.exec("SELECT is_admin FROM users WHERE id = ?", [userId]);
+    if (adminResult.length && adminResult[0].values.length && adminResult[0].values[0][0] === 1) {
+      const exists = await db.exec("SELECT id FROM scope_documents WHERE id = ?", [scopeId]);
+      if (exists.length && exists[0].values.length) return "editor";
+    }
     return null;
   }
   return result[0].values[0][0] as string;
@@ -648,9 +671,13 @@ export async function getCollaborators(scopeId: string) {
   );
 }
 
-export async function addCollaborator(scopeId: string, email: string, role: string) {
+export async function addCollaborator(scopeId: string, identifier: string, role: string) {
   const db = await getDb();
-  const userResult = await db.exec("SELECT id FROM users WHERE email = ?", [email]);
+  // Try email first, then fall back to name lookup
+  let userResult = await db.exec("SELECT id FROM users WHERE email = ?", [identifier]);
+  if (!userResult.length || !userResult[0].values.length) {
+    userResult = await db.exec("SELECT id FROM users WHERE LOWER(name) = LOWER(?)", [identifier]);
+  }
   if (!userResult.length || !userResult[0].values.length) {
     throw new Error("User not found");
   }
@@ -662,6 +689,30 @@ export async function addCollaborator(scopeId: string, email: string, role: stri
     [generateId(), scopeId, userId, role, new Date().toISOString()]
   );
   saveDb();
+}
+
+export async function updateCollaboratorRole(scopeId: string, userId: string, role: string): Promise<void> {
+  const db = await getDb();
+  if (role === "owner") throw new Error("Cannot set role to owner");
+  await db.run(
+    "UPDATE scope_collaborators SET role = ? WHERE scope_id = ? AND user_id = ? AND role != 'owner'",
+    [role, scopeId, userId]
+  );
+  saveDb();
+}
+
+export async function searchUsers(query: string): Promise<{ id: string; name: string; email: string }[]> {
+  const db = await getDb();
+  const result = await db.exec(
+    "SELECT id, name, email FROM users WHERE LOWER(name) LIKE ? OR LOWER(email) LIKE ? ORDER BY LOWER(name) LIMIT 10",
+    [`%${query.toLowerCase()}%`, `%${query.toLowerCase()}%`]
+  );
+  if (!result.length) return [];
+  return result[0].values.map(row => ({
+    id: row[0] as string,
+    name: row[1] as string,
+    email: row[2] as string,
+  }));
 }
 
 export async function removeCollaborator(scopeId: string, userId: string) {
@@ -1300,6 +1351,62 @@ export async function markAllNotificationsRead(userId: string): Promise<void> {
   const db = await getDb();
   await db.run("UPDATE notifications SET read = 1 WHERE user_id = ? AND read = 0", [userId]);
   saveDb();
+}
+
+// ── Notification Preferences ──────────────────────────────────────
+
+export interface NotificationPrefs {
+  scope_updates: boolean;
+  status_changes: boolean;
+  comments: boolean;
+  collaborator_added: boolean;
+}
+
+const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
+  scope_updates: true,
+  status_changes: true,
+  comments: true,
+  collaborator_added: true,
+};
+
+export async function getNotificationPrefs(userId: string): Promise<NotificationPrefs> {
+  const db = await getDb();
+  const result = await db.exec("SELECT notification_prefs FROM users WHERE id = ?", [userId]);
+  if (!result.length || !result[0].values.length || !result[0].values[0][0]) {
+    return { ...DEFAULT_NOTIFICATION_PREFS };
+  }
+  try {
+    return { ...DEFAULT_NOTIFICATION_PREFS, ...JSON.parse(result[0].values[0][0] as string) };
+  } catch {
+    return { ...DEFAULT_NOTIFICATION_PREFS };
+  }
+}
+
+export async function updateNotificationPrefs(userId: string, prefs: Partial<NotificationPrefs>): Promise<void> {
+  const db = await getDb();
+  const current = await getNotificationPrefs(userId);
+  const merged = { ...current, ...prefs };
+  await db.run("UPDATE users SET notification_prefs = ? WHERE id = ?", [JSON.stringify(merged), userId]);
+  saveDb();
+}
+
+export async function createNotificationIfEnabled(
+  userId: string,
+  scopeId: string,
+  type: string,
+  message: string
+): Promise<void> {
+  const prefs = await getNotificationPrefs(userId);
+  const prefMap: Record<string, keyof NotificationPrefs> = {
+    scope_update: "scope_updates",
+    status_change: "status_changes",
+    comment: "comments",
+    mention: "comments",
+    collaborator_added: "collaborator_added",
+  };
+  const prefKey = prefMap[type];
+  if (prefKey && !prefs[prefKey]) return; // User disabled this type
+  await createNotification(userId, scopeId, type, message);
 }
 
 // ── Comments ──────────────────────────────────────────────────────────

@@ -6,7 +6,7 @@ import {
   getWorkflow, getForecasts, getScopeStats, getCollaborators, getWorkshopQuestions,
   getTrainingQuestions, cloneScope, upsertRow, deleteRow,
   getWorkflowTechnical, upsertWorkflowTechnical, getCompletionConfig, logActivity,
-  logAudit, createNotification
+  logAudit, createNotificationIfEnabled
 } from "@/lib/scopes";
 import { getDb, saveDb } from "@/lib/db";
 import { generateId } from "@/lib/utils";
@@ -279,7 +279,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       if (scopeDoc && scopeDoc.owner_id !== session.user.id && section !== "clone") {
         const userName = session.user.name || "Someone";
         const fleetName = scopeDoc.fleet_name || "a scope";
-        await createNotification(
+        await createNotificationIfEnabled(
           scopeDoc.owner_id,
           id,
           "scope_update",
@@ -322,9 +322,32 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       const newStatus = configuredTotal > 0 && configuredFilled >= configuredTotal
         ? "complete"
         : "draft";
+
+      // Check if status actually changed and notify collaborators
+      const currentScopeForStatus = await getScope(id) as any;
+      const oldStatus = currentScopeForStatus?.status;
+
       const db2 = await getDb();
       await db2.run("UPDATE scope_documents SET status = ? WHERE id = ?", [newStatus, id]);
       saveDb();
+
+      if (oldStatus && oldStatus !== newStatus) {
+        // Notify all collaborators about status change
+        try {
+          const collabs = await getCollaborators(id);
+          const fleetName = currentScopeForStatus?.fleet_name || "a scope";
+          for (const c of collabs) {
+            if ((c as any).user_id !== session.user.id) {
+              await createNotificationIfEnabled(
+                (c as any).user_id,
+                id,
+                "status_change",
+                `${fleetName} status changed from ${oldStatus} to ${newStatus}`
+              );
+            }
+          }
+        } catch {}
+      }
     } catch {}
 
     return NextResponse.json({ ok: true });

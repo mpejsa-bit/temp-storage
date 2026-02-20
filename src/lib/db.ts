@@ -575,6 +575,13 @@ function initSqliteSchema(db: Database) {
       created_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS scope_presence (
+      scope_id TEXT NOT NULL REFERENCES scope_documents(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      last_seen TEXT NOT NULL,
+      PRIMARY KEY (scope_id, user_id)
+    );
+
     CREATE TABLE IF NOT EXISTS workflow_technical (
       id TEXT PRIMARY KEY,
       scope_id TEXT UNIQUE NOT NULL REFERENCES scope_documents(id) ON DELETE CASCADE,
@@ -777,6 +784,19 @@ function runMigrations(db: Database) {
     )`);
   } catch {}
 
+  // Add scope_presence table
+  try {
+    db.run(`CREATE TABLE IF NOT EXISTS scope_presence (
+      scope_id TEXT NOT NULL REFERENCES scope_documents(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      last_seen TEXT NOT NULL,
+      PRIMARY KEY (scope_id, user_id)
+    )`);
+  } catch {}
+
+  // Add notification_prefs column to users
+  try { db.run("ALTER TABLE users ADD COLUMN notification_prefs TEXT"); } catch {}
+
   // Reset any scopes incorrectly set to 'active' back to 'draft'
   try {
     db.run("UPDATE scope_documents SET status = 'draft' WHERE status = 'active'");
@@ -797,6 +817,7 @@ async function initPostgresSchema(db: DbAdapter) {
       avatar_url TEXT,
       is_admin INTEGER NOT NULL DEFAULT 0,
       last_login_at TEXT,
+      notification_prefs TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )`,
     `CREATE TABLE IF NOT EXISTS scope_documents (
@@ -1102,6 +1123,12 @@ async function initPostgresSchema(db: DbAdapter) {
       message TEXT NOT NULL,
       read INTEGER DEFAULT 0,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS scope_presence (
+      scope_id TEXT NOT NULL REFERENCES scope_documents(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      last_seen TEXT NOT NULL,
+      PRIMARY KEY (scope_id, user_id)
     )`,
     `CREATE TABLE IF NOT EXISTS workflow_technical (
       id TEXT PRIMARY KEY,
