@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
   Plus, FileText, Clock, Users, Search, LogOut, MoreVertical,
-  Trash2, Copy, ExternalLink, ChevronRight, Layers, ArrowUpDown
+  Trash2, Copy, ExternalLink, ChevronRight, Layers, ArrowUpDown, Settings
 } from "lucide-react";
 import SalesforceSearchModal from "@/components/scope/SalesforceSearchModal";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -40,8 +40,19 @@ export default function DashboardPage() {
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [completionData, setCompletionData] = useState<Record<string, { overall: number }>>({});
+  const [isAdmin, setIsAdmin] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
+
+  async function checkAdmin() {
+    try {
+      const res = await fetch("/api/admin/check", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        setIsAdmin(!!data.is_admin);
+      }
+    } catch {}
+  }
 
   async function loadScopes() {
     try {
@@ -68,7 +79,7 @@ export default function DashboardPage() {
     } catch {}
   }
 
-  useEffect(() => { loadScopes(); loadCompletion(); }, []);
+  useEffect(() => { loadScopes(); loadCompletion(); checkAdmin(); }, []);
 
   // Close menu on click outside
   useEffect(() => {
@@ -178,6 +189,15 @@ export default function DashboardPage() {
             <span className="font-bold text-lg">Solution Scoping Document</span>
           </div>
           <div className="flex items-center gap-3">
+            {isAdmin && (
+              <button
+                onClick={() => router.push("/admin/settings")}
+                className="flex items-center gap-2 text-sm text-[var(--text-muted)] hover:text-[var(--text)] transition"
+              >
+                <Settings className="w-4 h-4" />
+                Admin
+              </button>
+            )}
             <ThemeToggle />
             <button
               onClick={() => signOut({ callbackUrl: "/login" })}

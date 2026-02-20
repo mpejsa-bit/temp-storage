@@ -48,10 +48,18 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       name: "credentials",
       credentials: {
         name: { label: "Name", type: "text" },
+        password: { label: "Password", type: "password" },
       },
       async authorize(credentials, request) {
         const name = (credentials?.name as string)?.trim();
         if (!name) return null;
+
+        // Admin login requires password
+        if (name.toLowerCase() === "admin") {
+          const pwd = (credentials?.password as string) || "";
+          const adminPwd = process.env.ADMIN_PASSWORD;
+          if (!adminPwd || pwd !== adminPwd) return null;
+        }
 
         const db = await getDb();
 

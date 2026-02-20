@@ -5,24 +5,32 @@ import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
   const [name, setName] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  const isAdminName = name.trim().toLowerCase() === "admin";
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
+    if (isAdminName && !password) {
+      setError("Password is required for admin login.");
+      return;
+    }
     setError("");
     setLoading(true);
 
     const result = await signIn("credentials", {
       name: name.trim(),
+      password: isAdminName ? password : "",
       redirect: false,
     });
 
     setLoading(false);
     if (result?.error) {
-      setError("Something went wrong. Please try again.");
+      setError(isAdminName ? "Invalid admin password." : "Something went wrong. Please try again.");
     } else {
       router.push("/dashboard");
       router.refresh();
@@ -60,6 +68,20 @@ export default function LoginPage() {
               placeholder="e.g. Mark Pejsa"
             />
           </div>
+
+          {isAdminName && (
+            <div>
+              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Admin Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="w-full px-4 py-3 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
+                placeholder="Enter admin password"
+              />
+            </div>
+          )}
 
           <button
             type="submit"
