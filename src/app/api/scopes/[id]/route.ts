@@ -10,6 +10,7 @@ import {
 import { getDb, saveDb } from "@/lib/db";
 import { generateId } from "@/lib/utils";
 import { computeScopeCompletion } from "@/lib/completion";
+import { buildActivityMeta } from "@/lib/geo";
 
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   const session = await auth();
@@ -177,7 +178,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         break;
       case "clone": {
         const newId = await cloneScope(id, session.user.id);
-        logActivity(session.user.id, "clone_scope", id).catch(() => {});
+        buildActivityMeta(id).then(m => logActivity(session.user.id, "clone_scope", m)).catch(() => {});
         return NextResponse.json({ id: newId });
       }
       default:
@@ -186,7 +187,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
     // Log the update activity
     const actionLabel = action === "delete" ? `delete_${section}` : `update_${section}`;
-    logActivity(session.user.id, actionLabel, id).catch(() => {});
+    buildActivityMeta(id).then(m => logActivity(session.user.id, actionLabel, m)).catch(() => {});
 
     // Always update scope_documents.updated_at so dashboard reflects recent saves
     const touchDb = await getDb();
@@ -243,6 +244,6 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
   if (role !== "owner") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   await deleteScope(id);
-  logActivity(session.user.id, "delete_scope", id).catch(() => {});
+  buildActivityMeta(id).then(m => logActivity(session.user.id, "delete_scope", m)).catch(() => {});
   return NextResponse.json({ ok: true });
 }

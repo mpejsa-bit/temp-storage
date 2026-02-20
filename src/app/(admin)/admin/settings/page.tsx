@@ -138,6 +138,11 @@ interface ActivityRecord {
   id: string;
   action: string;
   detail: string | null;
+  ip_address: string | null;
+  city: string | null;
+  region: string | null;
+  country: string | null;
+  user_agent: string | null;
   created_at: string;
   user_name: string;
 }
@@ -172,6 +177,25 @@ const ACTION_LABELS: Record<string, { label: string; color: string }> = {
   add_collaborator:   { label: "Added collaborator",  color: "text-cyan-400 bg-cyan-500/15" },
   remove_collaborator:{ label: "Removed collaborator", color: "text-cyan-400 bg-cyan-500/15" },
 };
+
+/* ── User agent parser ────────────────────────────────────────── */
+
+function shortUA(ua: string | null): string {
+  if (!ua || ua === "unknown") return "—";
+  if (ua.includes("Edg/")) return "Edge";
+  if (ua.includes("Chrome/")) return "Chrome";
+  if (ua.includes("Firefox/")) return "Firefox";
+  if (ua.includes("Safari/") && !ua.includes("Chrome")) return "Safari";
+  if (ua.includes("MSIE") || ua.includes("Trident")) return "IE";
+  return ua.substring(0, 20);
+}
+
+function formatLocation(city: string | null, region: string | null): string {
+  if (city && region) return `${city}, ${region}`;
+  if (city) return city;
+  if (region) return region;
+  return "—";
+}
 
 /* ── Relative time helper ────────────────────────────────────────── */
 
@@ -661,14 +685,16 @@ export default function AdminSettingsPage() {
                         <tr className="border-b border-[var(--border)]">
                           <th className="text-left px-4 py-3 text-[var(--text-secondary)] font-medium">User</th>
                           <th className="text-left px-4 py-3 text-[var(--text-secondary)] font-medium">Action</th>
-                          <th className="text-left px-4 py-3 text-[var(--text-secondary)] font-medium">Detail</th>
+                          <th className="text-left px-4 py-3 text-[var(--text-secondary)] font-medium">Location</th>
+                          <th className="text-left px-4 py-3 text-[var(--text-secondary)] font-medium">IP</th>
+                          <th className="text-left px-4 py-3 text-[var(--text-secondary)] font-medium">Browser</th>
                           <th className="text-left px-4 py-3 text-[var(--text-secondary)] font-medium">When</th>
                         </tr>
                       </thead>
                       <tbody>
                         {activity.length === 0 ? (
                           <tr>
-                            <td colSpan={4} className="px-4 py-8 text-center text-[var(--text-muted)]">
+                            <td colSpan={6} className="px-4 py-8 text-center text-[var(--text-muted)]">
                               No activity recorded yet
                             </td>
                           </tr>
@@ -677,16 +703,22 @@ export default function AdminSettingsPage() {
                             const info = ACTION_LABELS[a.action] ?? { label: a.action, color: "text-[var(--text-muted)] bg-[var(--bg-secondary)]" };
                             return (
                               <tr key={a.id} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--bg-secondary)] transition-colors">
-                                <td className="px-4 py-3 text-[var(--text)] font-medium">{a.user_name}</td>
+                                <td className="px-4 py-3 text-[var(--text)] font-medium whitespace-nowrap">{a.user_name}</td>
                                 <td className="px-4 py-3">
-                                  <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium ${info.color}`}>
+                                  <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${info.color}`}>
                                     {info.label}
                                   </span>
                                 </td>
-                                <td className="px-4 py-3 text-[var(--text-secondary)] max-w-[200px] truncate" title={a.detail || ""}>
-                                  {a.detail || "—"}
+                                <td className="px-4 py-3 text-[var(--text-secondary)] whitespace-nowrap">
+                                  {formatLocation(a.city, a.region)}
                                 </td>
-                                <td className="px-4 py-3 text-[var(--text-secondary)]" title={a.created_at}>
+                                <td className="px-4 py-3 text-[var(--text-muted)] font-mono text-xs" title={a.ip_address || ""}>
+                                  {a.ip_address || "—"}
+                                </td>
+                                <td className="px-4 py-3 text-[var(--text-secondary)]" title={a.user_agent || ""}>
+                                  {shortUA(a.user_agent)}
+                                </td>
+                                <td className="px-4 py-3 text-[var(--text-secondary)] whitespace-nowrap" title={a.created_at}>
                                   {timeAgo(a.created_at)}
                                 </td>
                               </tr>

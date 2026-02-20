@@ -807,11 +807,23 @@ export async function recordLogin(userId: string): Promise<void> {
   saveDb();
 }
 
-export async function logActivity(userId: string, action: string, detail?: string): Promise<void> {
+export interface ActivityMeta {
+  detail?: string;
+  ip?: string;
+  userAgent?: string;
+  city?: string;
+  region?: string;
+  country?: string;
+}
+
+export async function logActivity(userId: string, action: string, meta?: string | ActivityMeta): Promise<void> {
   const db = await getDb();
+  // Support legacy string-only detail param
+  const m: ActivityMeta = typeof meta === "string" ? { detail: meta } : (meta ?? {});
   db.run(
-    "INSERT INTO access_log (id, user_id, action, detail, created_at) VALUES (?, ?, ?, ?, ?)",
-    [generateId(), userId, action, detail ?? null, new Date().toISOString()]
+    `INSERT INTO access_log (id, user_id, action, detail, ip_address, city, region, country, user_agent, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [generateId(), userId, action, m.detail ?? null, m.ip ?? null, m.city ?? null, m.region ?? null, m.country ?? null, m.userAgent ?? null, new Date().toISOString()]
   );
   saveDb();
 }
@@ -832,7 +844,7 @@ export async function getAllUsers(): Promise<Record<string, unknown>[]> {
 export async function getRecentActivity(limit = 100): Promise<Record<string, unknown>[]> {
   const db = await getDb();
   const result = db.exec(
-    `SELECT al.id, al.action, al.detail, al.created_at, u.name as user_name
+    `SELECT al.id, al.action, al.detail, al.ip_address, al.city, al.region, al.country, al.user_agent, al.created_at, u.name as user_name
      FROM access_log al
      JOIN users u ON u.id = al.user_id
      ORDER BY al.created_at DESC

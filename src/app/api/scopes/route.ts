@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { createScope, createScopeWithSfData, listScopes, logActivity } from "@/lib/scopes";
+import { buildActivityMeta } from "@/lib/geo";
 import { seedDatabase } from "@/lib/seed";
 
 export async function GET() {
@@ -25,6 +26,6 @@ export async function POST(req: Request) {
   } else {
     id = await createScope(session.user.id, name);
   }
-  logActivity(session.user.id, "create_scope", name).catch(() => {});
+  buildActivityMeta(name).then(m => logActivity(session.user.id, "create_scope", m)).catch(() => {});
   return NextResponse.json({ id });
 }

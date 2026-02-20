@@ -342,6 +342,11 @@ function initSchema(db: Database) {
       user_id TEXT NOT NULL REFERENCES users(id),
       action TEXT NOT NULL DEFAULT 'login',
       detail TEXT,
+      ip_address TEXT,
+      city TEXT,
+      region TEXT,
+      country TEXT,
+      user_agent TEXT,
       created_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -447,6 +452,13 @@ function runMigrations(db: Database) {
 
   // Add detail column to access_log for existing databases
   try { db.run("ALTER TABLE access_log ADD COLUMN detail TEXT"); } catch {}
+
+  // Add IP/geo/UA columns to access_log
+  try { db.run("ALTER TABLE access_log ADD COLUMN ip_address TEXT"); } catch {}
+  try { db.run("ALTER TABLE access_log ADD COLUMN city TEXT"); } catch {}
+  try { db.run("ALTER TABLE access_log ADD COLUMN region TEXT"); } catch {}
+  try { db.run("ALTER TABLE access_log ADD COLUMN country TEXT"); } catch {}
+  try { db.run("ALTER TABLE access_log ADD COLUMN user_agent TEXT"); } catch {}
 
   // Add last_login_at column to users
   try { db.run("ALTER TABLE users ADD COLUMN last_login_at TEXT"); } catch {}

@@ -2,13 +2,40 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { getDb, saveDb } from "@/lib/db";
 
-async function logAccess(userId: string) {
+async function resolveGeo(ip: string): Promise<{ city?: string; region?: string; country?: string }> {
+  if (!ip || ip === "unknown" || ip === "127.0.0.1" || ip === "::1") return {};
+  try {
+    const res = await fetch(`http://ip-api.com/json/${ip}?fields=city,regionName,country`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!res.ok) return {};
+    const data = await res.json();
+    return { city: data.city, region: data.regionName, country: data.country };
+  } catch {
+    return {};
+  }
+}
+
+async function logAccess(userId: string, request?: Request) {
   try {
     const db = await getDb();
     const now = new Date().toISOString();
+
+    let ip = "unknown";
+    let userAgent = "unknown";
+    if (request) {
+      ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+        || request.headers.get("x-real-ip")
+        || "unknown";
+      userAgent = request.headers.get("user-agent") || "unknown";
+    }
+
+    const geo = await resolveGeo(ip);
+
     db.run(
-      "INSERT INTO access_log (id, user_id, action, created_at) VALUES (?, ?, 'login', ?)",
-      [crypto.randomUUID(), userId, now]
+      `INSERT INTO access_log (id, user_id, action, ip_address, city, region, country, user_agent, created_at)
+       VALUES (?, ?, 'login', ?, ?, ?, ?, ?, ?)`,
+      [crypto.randomUUID(), userId, ip, geo.city ?? null, geo.region ?? null, geo.country ?? null, userAgent, now]
     );
     db.run("UPDATE users SET last_login_at = ? WHERE id = ?", [now, userId]);
     saveDb();
@@ -22,7 +49,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       credentials: {
         name: { label: "Name", type: "text" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         const name = (credentials?.name as string)?.trim();
         if (!name) return null;
 
@@ -38,7 +65,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           const [id, email, userName] = rows[0].values[0] as string[];
           const adminRow = db.exec("SELECT is_admin FROM users WHERE id = ?", [id]);
           const isAdmin = adminRow.length && adminRow[0].values.length ? adminRow[0].values[0][0] === 1 : false;
-          logAccess(id);
+          logAccess(id, request as unknown as Request);
           return { id, email, name: userName, is_admin: isAdmin };
         }
 
@@ -51,7 +78,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         );
         saveDb();
 
-        logAccess(id);
+        logAccess(id, request as unknown as Request);
         return { id, email, name, is_admin: false };
       },
     }),

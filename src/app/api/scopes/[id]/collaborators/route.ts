@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getUserRole, addCollaborator, removeCollaborator, getCollaborators, logActivity } from "@/lib/scopes";
+import { buildActivityMeta } from "@/lib/geo";
 
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   const session = await auth();
@@ -23,7 +24,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const { email, role: newRole } = await req.json();
   try {
     await addCollaborator(params.id, email, newRole || "viewer");
-    logActivity(session.user.id, "add_collaborator", `${email} to ${params.id}`).catch(() => {});
+    buildActivityMeta(`${email} to ${params.id}`).then(m => logActivity(session.user.id, "add_collaborator", m)).catch(() => {});
     return NextResponse.json({ ok: true });
   } catch (e: unknown) {
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
@@ -39,6 +40,6 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
 
   const { user_id } = await req.json();
   await removeCollaborator(params.id, user_id);
-  logActivity(session.user.id, "remove_collaborator", `${user_id} from ${params.id}`).catch(() => {});
+  buildActivityMeta(`${user_id} from ${params.id}`).then(m => logActivity(session.user.id, "remove_collaborator", m)).catch(() => {});
   return NextResponse.json({ ok: true });
 }
