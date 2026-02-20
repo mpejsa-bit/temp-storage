@@ -442,4 +442,36 @@ function runMigrations(db: Database) {
     try { db.run(`ALTER TABLE workflow_technical ADD COLUMN ${col} TEXT`); changed = true; } catch {}
   }
   if (changed) saveDb();
+
+  // Backfill Executive Sponsor fleet contact for scopes that don't have one
+  try {
+    const missing = db.exec(`
+      SELECT sd.id FROM scope_documents sd
+      WHERE NOT EXISTS (
+        SELECT 1 FROM contacts c
+        WHERE c.scope_id = sd.id
+          AND c.contact_type = 'fleet'
+          AND c.role_title = 'Executive Sponsor'
+      )
+    `);
+    if (missing.length && missing[0].values.length) {
+      for (const row of missing[0].values) {
+        const scopeId = row[0] as string;
+        const contactId = crypto.randomUUID();
+        db.run(
+          `INSERT INTO contacts (id, scope_id, contact_type, role_title, sort_order)
+           VALUES (?, ?, 'fleet', 'Executive Sponsor', 0)`,
+          [contactId, scopeId]
+        );
+      }
+      saveDb();
+    }
+  } catch {}
+
+  // Reset any scopes incorrectly set to 'active' back to 'draft'
+  // (they were auto-promoted due to unconfigured tabs counting as 100%)
+  try {
+    db.run("UPDATE scope_documents SET status = 'draft' WHERE status = 'active'");
+    saveDb();
+  } catch {}
 }

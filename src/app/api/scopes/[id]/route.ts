@@ -204,8 +204,18 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         forecasts: await getForecasts(id),
         workflow_technical: await getWorkflowTechnical(id),
       };
-      const { overall } = computeScopeCompletion(scopeData, config);
-      const newStatus = overall >= 100 ? "complete" : overall > 0 ? "active" : "draft";
+      const completion = computeScopeCompletion(scopeData, config);
+      // Only count tabs that have actual requirements configured
+      const configuredTabs = Object.entries(completion.tabs).filter(
+        ([key]) => config[key] && (config[key].required_fields.length > 0 || (config[key].min_rows ?? 0) > 0)
+      );
+      const configuredTotal = configuredTabs.reduce((s, [, t]) => s + t.total, 0);
+      const configuredFilled = configuredTabs.reduce((s, [, t]) => s + t.filled, 0);
+      // Status: complete only when ALL configured requirements are met,
+      // draft until at least some configured requirements are filled
+      const newStatus = configuredTotal > 0 && configuredFilled >= configuredTotal
+        ? "complete"
+        : "draft";
       const db2 = await getDb();
       db2.run("UPDATE scope_documents SET status = ? WHERE id = ?", [newStatus, id]);
       saveDb();
