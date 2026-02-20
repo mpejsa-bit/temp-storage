@@ -310,7 +310,7 @@ export async function createScopeWithSfData(
 export async function listScopes(userId: string): Promise<ScopeDocument[]> {
   const db = await getDb();
   const result = db.exec(
-    `SELECT sd.*, COALESCE(sc.role, 'viewer') as role, u.name as owner_name, u.email as owner_email
+    `SELECT sd.*, COALESCE(sc.role, 'editor') as role, u.name as owner_name, u.email as owner_email
      FROM scope_documents sd
      LEFT JOIN scope_collaborators sc ON sc.scope_id = sd.id AND sc.user_id = ?
      JOIN users u ON u.id = sd.owner_id
