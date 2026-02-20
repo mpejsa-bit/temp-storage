@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { ArrowLeft, ChevronDown, ChevronRight, Save, Loader2, Shield } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronRight, Save, Loader2, Shield, Users, Settings } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useToast } from "@/components/Toast";
 
@@ -124,6 +124,84 @@ interface TabConfig {
 
 type ConfigMap = Record<string, TabConfig>;
 
+interface UserRecord {
+  id: string;
+  name: string;
+  email: string;
+  is_admin: number;
+  created_at: string;
+  last_login_at: string | null;
+  login_count: number;
+}
+
+interface ActivityRecord {
+  id: string;
+  action: string;
+  detail: string | null;
+  created_at: string;
+  user_name: string;
+}
+
+const ACTION_LABELS: Record<string, { label: string; color: string }> = {
+  login:              { label: "Logged in",           color: "text-green-400 bg-green-500/15" },
+  create_scope:       { label: "Created scope",       color: "text-blue-400 bg-blue-500/15" },
+  update_scope:       { label: "Updated scope",       color: "text-amber-400 bg-amber-500/15" },
+  update_overview:    { label: "Updated overview",    color: "text-amber-400 bg-amber-500/15" },
+  update_contacts:    { label: "Updated contacts",    color: "text-amber-400 bg-amber-500/15" },
+  update_marketplace: { label: "Updated marketplace", color: "text-amber-400 bg-amber-500/15" },
+  update_upas:        { label: "Updated UPAs",        color: "text-amber-400 bg-amber-500/15" },
+  update_features:    { label: "Updated features",    color: "text-amber-400 bg-amber-500/15" },
+  update_gaps:        { label: "Updated gaps",        color: "text-amber-400 bg-amber-500/15" },
+  update_forms:       { label: "Updated forms",       color: "text-amber-400 bg-amber-500/15" },
+  update_workshop:    { label: "Updated workshop",    color: "text-amber-400 bg-amber-500/15" },
+  update_training:    { label: "Updated training",    color: "text-amber-400 bg-amber-500/15" },
+  update_forecasts:   { label: "Updated forecasts",   color: "text-amber-400 bg-amber-500/15" },
+  update_workflow:    { label: "Updated workflow",     color: "text-amber-400 bg-amber-500/15" },
+  update_workflow_technical: { label: "Updated tech config", color: "text-amber-400 bg-amber-500/15" },
+  delete_scope:       { label: "Deleted scope",       color: "text-red-400 bg-red-500/15" },
+  delete_contacts:    { label: "Deleted contact",     color: "text-red-400 bg-red-500/15" },
+  delete_marketplace: { label: "Deleted marketplace app", color: "text-red-400 bg-red-500/15" },
+  delete_upas:        { label: "Deleted UPA",         color: "text-red-400 bg-red-500/15" },
+  delete_gaps:        { label: "Deleted gap",         color: "text-red-400 bg-red-500/15" },
+  delete_forms:       { label: "Deleted form",        color: "text-red-400 bg-red-500/15" },
+  delete_workshop:    { label: "Deleted workshop Q",  color: "text-red-400 bg-red-500/15" },
+  delete_training:    { label: "Deleted training Q",  color: "text-red-400 bg-red-500/15" },
+  clone_scope:        { label: "Cloned scope",        color: "text-purple-400 bg-purple-500/15" },
+  enable_sharing:     { label: "Enabled sharing",     color: "text-cyan-400 bg-cyan-500/15" },
+  disable_sharing:    { label: "Disabled sharing",    color: "text-cyan-400 bg-cyan-500/15" },
+  add_collaborator:   { label: "Added collaborator",  color: "text-cyan-400 bg-cyan-500/15" },
+  remove_collaborator:{ label: "Removed collaborator", color: "text-cyan-400 bg-cyan-500/15" },
+};
+
+/* ── Relative time helper ────────────────────────────────────────── */
+
+function timeAgo(dateStr: string | null): string {
+  if (!dateStr) return "Never";
+  const now = Date.now();
+  const then = new Date(dateStr + (dateStr.endsWith("Z") ? "" : "Z")).getTime();
+  const seconds = Math.floor((now - then) / 1000);
+  if (seconds < 60) return "Just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo ago`;
+  return `${Math.floor(months / 12)}y ago`;
+}
+
+function formatDateTime(dateStr: string | null): string {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr + (dateStr.endsWith("Z") ? "" : "Z"));
+  return d.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 /* ── Page component ─────────────────────────────────────────────── */
 
 export default function AdminSettingsPage() {
@@ -135,6 +213,14 @@ export default function AdminSettingsPage() {
   const [fetchError, setFetchError] = useState("");
   const [expandedTabs, setExpandedTabs] = useState<Set<string>>(new Set());
   const [savingTab, setSavingTab] = useState<string | null>(null);
+
+  // Page-level tab: "completion" or "activity"
+  const [activeSection, setActiveSection] = useState<"completion" | "activity">("completion");
+
+  // User activity state
+  const [users, setUsers] = useState<UserRecord[]>([]);
+  const [activity, setActivity] = useState<ActivityRecord[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
 
   /* ── Check admin status ──────────────────────────────────────── */
 
@@ -186,6 +272,29 @@ export default function AdminSettingsPage() {
     }
     setLoading(false);
   }
+
+  /* ── Fetch user activity data ──────────────────────────────── */
+
+  const fetchActivity = useCallback(async () => {
+    setActivityLoading(true);
+    try {
+      const [usersRes, activityRes] = await Promise.all([
+        fetch("/api/admin/users", { cache: "no-store" }),
+        fetch("/api/admin/activity", { cache: "no-store" }),
+      ]);
+      if (usersRes.ok) setUsers(await usersRes.json());
+      if (activityRes.ok) setActivity(await activityRes.json());
+    } catch {
+      // silently fail — tables will show empty
+    }
+    setActivityLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (activeSection === "activity" && isAdmin) {
+      fetchActivity();
+    }
+  }, [activeSection, isAdmin, fetchActivity]);
 
   /* ── Helpers ────────────────────────────────────────────────── */
 
@@ -321,135 +430,278 @@ export default function AdminSettingsPage() {
               Dashboard
             </Link>
             <div className="w-px h-5 bg-[var(--border)]" />
-            <h1 className="text-lg font-semibold text-[var(--text)]">Completion Settings</h1>
+            <h1 className="text-lg font-semibold text-[var(--text)]">Admin Settings</h1>
           </div>
           <ThemeToggle />
         </div>
       </header>
 
+      {/* Section tab navigation */}
+      <div className="border-b border-[var(--border)] bg-[var(--bg-card)]">
+        <div className="max-w-4xl mx-auto px-6 flex gap-0">
+          <button
+            onClick={() => setActiveSection("completion")}
+            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+              activeSection === "completion"
+                ? "border-blue-500 text-blue-400"
+                : "border-transparent text-[var(--text-secondary)] hover:text-[var(--text)]"
+            }`}
+          >
+            <Settings className="w-4 h-4" />
+            Completion Settings
+          </button>
+          <button
+            onClick={() => setActiveSection("activity")}
+            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+              activeSection === "activity"
+                ? "border-blue-500 text-blue-400"
+                : "border-transparent text-[var(--text-secondary)] hover:text-[var(--text)]"
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            User Activity
+          </button>
+        </div>
+      </div>
+
       {/* Content */}
-      <main className="max-w-4xl mx-auto px-6 py-8 space-y-4">
-        <p className="text-sm text-[var(--text-secondary)] mb-6">
-          Configure which fields are required for each tab to be considered complete.
-          For row-based tabs, you can also set a minimum number of rows.
-        </p>
+      {activeSection === "completion" ? (
+        <main className="max-w-4xl mx-auto px-6 py-8 space-y-4">
+          <p className="text-sm text-[var(--text-secondary)] mb-6">
+            Configure which fields are required for each tab to be considered complete.
+            For row-based tabs, you can also set a minimum number of rows.
+          </p>
 
-        {TAB_ORDER.map((tabKey) => {
-          const fields = TAB_FIELDS[tabKey];
-          const tabConfig = getTabConfig(tabKey);
-          const isExpanded = expandedTabs.has(tabKey);
-          const requiredCount = (tabConfig.required_fields ?? []).length;
-          const isRowBased = ROW_BASED_TABS.has(tabKey);
-          const isSaving = savingTab === tabKey;
+          {TAB_ORDER.map((tabKey) => {
+            const fields = TAB_FIELDS[tabKey];
+            const tabConfig = getTabConfig(tabKey);
+            const isExpanded = expandedTabs.has(tabKey);
+            const requiredCount = (tabConfig.required_fields ?? []).length;
+            const isRowBased = ROW_BASED_TABS.has(tabKey);
+            const isSaving = savingTab === tabKey;
 
-          return (
-            <div
-              key={tabKey}
-              className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl overflow-hidden"
-            >
-              {/* Accordion header */}
-              <button
-                onClick={() => toggleExpanded(tabKey)}
-                className="w-full px-5 py-4 flex items-center justify-between hover:bg-[var(--bg-secondary)] transition-colors"
+            return (
+              <div
+                key={tabKey}
+                className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl overflow-hidden"
               >
-                <div className="flex items-center gap-3">
-                  {isExpanded ? (
-                    <ChevronDown className="w-4 h-4 text-[var(--text-muted)]" />
-                  ) : (
-                    <ChevronRight className="w-4 h-4 text-[var(--text-muted)]" />
-                  )}
-                  <span className="text-sm font-medium text-[var(--text)]">
-                    {TAB_LABELS[tabKey]}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  {requiredCount > 0 && (
-                    <span className="text-xs bg-blue-500/15 text-blue-400 px-2 py-0.5 rounded-full font-medium">
-                      {requiredCount} required
+                {/* Accordion header */}
+                <button
+                  onClick={() => toggleExpanded(tabKey)}
+                  className="w-full px-5 py-4 flex items-center justify-between hover:bg-[var(--bg-secondary)] transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    {isExpanded ? (
+                      <ChevronDown className="w-4 h-4 text-[var(--text-muted)]" />
+                    ) : (
+                      <ChevronRight className="w-4 h-4 text-[var(--text-muted)]" />
+                    )}
+                    <span className="text-sm font-medium text-[var(--text)]">
+                      {TAB_LABELS[tabKey]}
                     </span>
-                  )}
-                  {isRowBased && (tabConfig.min_rows ?? 0) > 0 && (
-                    <span className="text-xs bg-amber-500/15 text-amber-400 px-2 py-0.5 rounded-full font-medium">
-                      min {tabConfig.min_rows} row{(tabConfig.min_rows ?? 0) !== 1 ? "s" : ""}
-                    </span>
-                  )}
-                </div>
-              </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {requiredCount > 0 && (
+                      <span className="text-xs bg-blue-500/15 text-blue-400 px-2 py-0.5 rounded-full font-medium">
+                        {requiredCount} required
+                      </span>
+                    )}
+                    {isRowBased && (tabConfig.min_rows ?? 0) > 0 && (
+                      <span className="text-xs bg-amber-500/15 text-amber-400 px-2 py-0.5 rounded-full font-medium">
+                        min {tabConfig.min_rows} row{(tabConfig.min_rows ?? 0) !== 1 ? "s" : ""}
+                      </span>
+                    )}
+                  </div>
+                </button>
 
-              {/* Expanded content */}
-              {isExpanded && (
-                <div className="border-t border-[var(--border)] px-5 py-4 space-y-5">
-                  {/* Min rows input */}
-                  {isRowBased && (
+                {/* Expanded content */}
+                {isExpanded && (
+                  <div className="border-t border-[var(--border)] px-5 py-4 space-y-5">
+                    {/* Min rows input */}
+                    {isRowBased && (
+                      <div>
+                        <label className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider block mb-2">
+                          Minimum rows required
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={tabConfig.min_rows ?? 0}
+                          onChange={(e) => setMinRows(tabKey, Math.max(0, parseInt(e.target.value) || 0))}
+                          className="w-24 px-3 py-1.5 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-[var(--text)] text-sm focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+                    )}
+
+                    {/* Field toggles */}
                     <div>
-                      <label className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider block mb-2">
-                        Minimum rows required
-                      </label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        value={tabConfig.min_rows ?? 0}
-                        onChange={(e) => setMinRows(tabKey, Math.max(0, parseInt(e.target.value) || 0))}
-                        className="w-24 px-3 py-1.5 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-[var(--text)] text-sm focus:outline-none focus:border-blue-500"
-                      />
-                    </div>
-                  )}
-
-                  {/* Field toggles */}
-                  <div>
-                    <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-3">
-                      Required Fields
-                    </h3>
-                    <div className="space-y-2">
-                      {fields.map((field) => {
-                        const isRequired = (tabConfig.required_fields ?? []).includes(field.key);
-                        return (
-                          <div
-                            key={field.key}
-                            className="flex items-center justify-between py-1.5 px-3 rounded-lg hover:bg-[var(--bg-secondary)] transition-colors"
-                          >
-                            <span className="text-sm text-[var(--text)]">{field.label}</span>
-                            <button
-                              onClick={() => toggleField(tabKey, field.key)}
-                              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                                isRequired ? "bg-blue-600" : "bg-[var(--border)]"
-                              }`}
-                              aria-label={`${isRequired ? "Disable" : "Enable"} ${field.label} as required`}
+                      <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-3">
+                        Required Fields
+                      </h3>
+                      <div className="space-y-2">
+                        {fields.map((field) => {
+                          const isRequired = (tabConfig.required_fields ?? []).includes(field.key);
+                          return (
+                            <div
+                              key={field.key}
+                              className="flex items-center justify-between py-1.5 px-3 rounded-lg hover:bg-[var(--bg-secondary)] transition-colors"
                             >
-                              <span
-                                className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
-                                  isRequired ? "translate-x-[18px]" : "translate-x-[3px]"
+                              <span className="text-sm text-[var(--text)]">{field.label}</span>
+                              <button
+                                onClick={() => toggleField(tabKey, field.key)}
+                                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                                  isRequired ? "bg-blue-600" : "bg-[var(--border)]"
                                 }`}
-                              />
-                            </button>
-                          </div>
-                        );
-                      })}
+                                aria-label={`${isRequired ? "Disable" : "Enable"} ${field.label} as required`}
+                              >
+                                <span
+                                  className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
+                                    isRequired ? "translate-x-[18px]" : "translate-x-[3px]"
+                                  }`}
+                                />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Save button */}
+                    <div className="flex justify-end pt-2">
+                      <button
+                        onClick={() => saveTab(tabKey)}
+                        disabled={isSaving}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+                      >
+                        {isSaving ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Save className="w-4 h-4" />
+                        )}
+                        {isSaving ? "Saving..." : "Save"}
+                      </button>
                     </div>
                   </div>
-
-                  {/* Save button */}
-                  <div className="flex justify-end pt-2">
-                    <button
-                      onClick={() => saveTab(tabKey)}
-                      disabled={isSaving}
-                      className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
-                    >
-                      {isSaving ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Save className="w-4 h-4" />
-                      )}
-                      {isSaving ? "Saving..." : "Save"}
-                    </button>
+                )}
+              </div>
+            );
+          })}
+        </main>
+      ) : (
+        /* ── User Activity section ──────────────────────────────── */
+        <main className="max-w-4xl mx-auto px-6 py-8 space-y-8">
+          {activityLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="w-6 h-6 animate-spin text-[var(--text-muted)]" />
+            </div>
+          ) : (
+            <>
+              {/* Users table */}
+              <section>
+                <h2 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-3">
+                  Registered Users ({users.length})
+                </h2>
+                <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-[var(--border)]">
+                          <th className="text-left px-4 py-3 text-[var(--text-secondary)] font-medium">Name</th>
+                          <th className="text-left px-4 py-3 text-[var(--text-secondary)] font-medium">Last Login</th>
+                          <th className="text-center px-4 py-3 text-[var(--text-secondary)] font-medium">Logins</th>
+                          <th className="text-left px-4 py-3 text-[var(--text-secondary)] font-medium">Created</th>
+                          <th className="text-center px-4 py-3 text-[var(--text-secondary)] font-medium">Role</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {users.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="px-4 py-8 text-center text-[var(--text-muted)]">
+                              No users found
+                            </td>
+                          </tr>
+                        ) : (
+                          users.map((u) => (
+                            <tr key={u.id} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--bg-secondary)] transition-colors">
+                              <td className="px-4 py-3 text-[var(--text)] font-medium">{u.name}</td>
+                              <td className="px-4 py-3 text-[var(--text-secondary)]" title={u.last_login_at || "Never"}>
+                                {timeAgo(u.last_login_at)}
+                              </td>
+                              <td className="px-4 py-3 text-center text-[var(--text-secondary)]">{u.login_count}</td>
+                              <td className="px-4 py-3 text-[var(--text-secondary)]">{formatDateTime(u.created_at)}</td>
+                              <td className="px-4 py-3 text-center">
+                                {u.is_admin === 1 ? (
+                                  <span className="inline-flex items-center gap-1 text-xs bg-blue-500/15 text-blue-400 px-2 py-0.5 rounded-full font-medium">
+                                    <Shield className="w-3 h-3" />
+                                    Admin
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-[var(--text-muted)]">User</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
-              )}
-            </div>
-          );
-        })}
-      </main>
+              </section>
+
+              {/* Recent activity log */}
+              <section>
+                <h2 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-3">
+                  Recent Activity
+                </h2>
+                <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-[var(--border)]">
+                          <th className="text-left px-4 py-3 text-[var(--text-secondary)] font-medium">User</th>
+                          <th className="text-left px-4 py-3 text-[var(--text-secondary)] font-medium">Action</th>
+                          <th className="text-left px-4 py-3 text-[var(--text-secondary)] font-medium">Detail</th>
+                          <th className="text-left px-4 py-3 text-[var(--text-secondary)] font-medium">When</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {activity.length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="px-4 py-8 text-center text-[var(--text-muted)]">
+                              No activity recorded yet
+                            </td>
+                          </tr>
+                        ) : (
+                          activity.map((a) => {
+                            const info = ACTION_LABELS[a.action] ?? { label: a.action, color: "text-[var(--text-muted)] bg-[var(--bg-secondary)]" };
+                            return (
+                              <tr key={a.id} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--bg-secondary)] transition-colors">
+                                <td className="px-4 py-3 text-[var(--text)] font-medium">{a.user_name}</td>
+                                <td className="px-4 py-3">
+                                  <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium ${info.color}`}>
+                                    {info.label}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 text-[var(--text-secondary)] max-w-[200px] truncate" title={a.detail || ""}>
+                                  {a.detail || "—"}
+                                </td>
+                                <td className="px-4 py-3 text-[var(--text-secondary)]" title={a.created_at}>
+                                  {timeAgo(a.created_at)}
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </section>
+            </>
+          )}
+        </main>
+      )}
     </div>
   );
 }

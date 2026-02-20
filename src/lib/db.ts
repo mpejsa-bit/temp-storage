@@ -337,6 +337,14 @@ function initSchema(db: Database) {
       updated_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS access_log (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      action TEXT NOT NULL DEFAULT 'login',
+      detail TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS workflow_technical (
       id TEXT PRIMARY KEY,
       scope_id TEXT UNIQUE NOT NULL REFERENCES scope_documents(id) ON DELETE CASCADE,
@@ -425,6 +433,23 @@ function runMigrations(db: Database) {
       updated_at TEXT DEFAULT (datetime('now'))
     )`);
   } catch {}
+
+  // Add access_log table for existing databases
+  try {
+    db.run(`CREATE TABLE IF NOT EXISTS access_log (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      action TEXT NOT NULL DEFAULT 'login',
+      detail TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    )`);
+  } catch {}
+
+  // Add detail column to access_log for existing databases
+  try { db.run("ALTER TABLE access_log ADD COLUMN detail TEXT"); } catch {}
+
+  // Add last_login_at column to users
+  try { db.run("ALTER TABLE users ADD COLUMN last_login_at TEXT"); } catch {}
 
   const techAppCols = [
     "tech_tpms","tech_trailer_tracking","tech_freight_visibility","tech_lane_departure",

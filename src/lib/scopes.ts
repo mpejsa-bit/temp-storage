@@ -310,9 +310,9 @@ export async function createScopeWithSfData(
 export async function listScopes(userId: string): Promise<ScopeDocument[]> {
   const db = await getDb();
   const result = db.exec(
-    `SELECT sd.*, sc.role, u.name as owner_name, u.email as owner_email
+    `SELECT sd.*, COALESCE(sc.role, 'viewer') as role, u.name as owner_name, u.email as owner_email
      FROM scope_documents sd
-     JOIN scope_collaborators sc ON sc.scope_id = sd.id AND sc.user_id = ?
+     LEFT JOIN scope_collaborators sc ON sc.scope_id = sd.id AND sc.user_id = ?
      JOIN users u ON u.id = sd.owner_id
      ORDER BY sd.updated_at DESC`,
     [userId]
@@ -343,7 +343,12 @@ export async function getUserRole(scopeId: string, userId: string): Promise<stri
     "SELECT role FROM scope_collaborators WHERE scope_id = ? AND user_id = ?",
     [scopeId, userId]
   );
-  if (!result.length || !result[0].values.length) return null;
+  if (!result.length || !result[0].values.length) {
+    // All users can view all scopes
+    const exists = db.exec("SELECT id FROM scope_documents WHERE id = ?", [scopeId]);
+    if (exists.length && exists[0].values.length) return "viewer";
+    return null;
+  }
   return result[0].values[0][0] as string;
 }
 
@@ -786,6 +791,55 @@ export async function setUserAdmin(userId: string, isAdmin: boolean): Promise<vo
   const db = await getDb();
   db.run("UPDATE users SET is_admin = ? WHERE id = ?", [isAdmin ? 1 : 0, userId]);
   saveDb();
+}
+
+// ── Access Tracking ───────────────────────────────────────────────────
+
+export async function recordLogin(userId: string): Promise<void> {
+  const db = await getDb();
+  const id = generateId();
+  const now = new Date().toISOString();
+  db.run(
+    "INSERT INTO access_log (id, user_id, action, created_at) VALUES (?, ?, 'login', ?)",
+    [id, userId, now]
+  );
+  db.run("UPDATE users SET last_login_at = ? WHERE id = ?", [now, userId]);
+  saveDb();
+}
+
+export async function logActivity(userId: string, action: string, detail?: string): Promise<void> {
+  const db = await getDb();
+  db.run(
+    "INSERT INTO access_log (id, user_id, action, detail, created_at) VALUES (?, ?, ?, ?, ?)",
+    [generateId(), userId, action, detail ?? null, new Date().toISOString()]
+  );
+  saveDb();
+}
+
+export async function getAllUsers(): Promise<Record<string, unknown>[]> {
+  const db = await getDb();
+  const result = db.exec(`
+    SELECT u.id, u.name, u.email, u.is_admin, u.created_at, u.last_login_at,
+           COUNT(al.id) as login_count
+    FROM users u
+    LEFT JOIN access_log al ON al.user_id = u.id AND al.action = 'login'
+    GROUP BY u.id
+    ORDER BY u.name COLLATE NOCASE
+  `);
+  return execToObjects(result);
+}
+
+export async function getRecentActivity(limit = 100): Promise<Record<string, unknown>[]> {
+  const db = await getDb();
+  const result = db.exec(
+    `SELECT al.id, al.action, al.detail, al.created_at, u.name as user_name
+     FROM access_log al
+     JOIN users u ON u.id = al.user_id
+     ORDER BY al.created_at DESC
+     LIMIT ?`,
+    [limit]
+  );
+  return execToObjects(result);
 }
 
 export async function deleteRow(table: string, id: string) {

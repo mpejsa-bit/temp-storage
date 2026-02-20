@@ -5,7 +5,7 @@ import {
   getContacts, getMarketplaceApps, getUPAs, getFeatures, getGaps, getForms,
   getWorkflow, getForecasts, getScopeStats, getCollaborators, getWorkshopQuestions,
   getTrainingQuestions, cloneScope, upsertRow, deleteRow,
-  getWorkflowTechnical, upsertWorkflowTechnical, getCompletionConfig
+  getWorkflowTechnical, upsertWorkflowTechnical, getCompletionConfig, logActivity
 } from "@/lib/scopes";
 import { getDb, saveDb } from "@/lib/db";
 import { generateId } from "@/lib/utils";
@@ -175,12 +175,18 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         ]);
         saveDb();
         break;
-      case "clone":
+      case "clone": {
         const newId = await cloneScope(id, session.user.id);
+        logActivity(session.user.id, "clone_scope", id).catch(() => {});
         return NextResponse.json({ id: newId });
+      }
       default:
         return NextResponse.json({ error: "Unknown section" }, { status: 400 });
     }
+
+    // Log the update activity
+    const actionLabel = action === "delete" ? `delete_${section}` : `update_${section}`;
+    logActivity(session.user.id, actionLabel, id).catch(() => {});
 
     // Always update scope_documents.updated_at so dashboard reflects recent saves
     const touchDb = await getDb();
@@ -237,5 +243,6 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
   if (role !== "owner") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   await deleteScope(id);
+  logActivity(session.user.id, "delete_scope", id).catch(() => {});
   return NextResponse.json({ ok: true });
 }

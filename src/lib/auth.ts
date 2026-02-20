@@ -2,6 +2,19 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { getDb, saveDb } from "@/lib/db";
 
+async function logAccess(userId: string) {
+  try {
+    const db = await getDb();
+    const now = new Date().toISOString();
+    db.run(
+      "INSERT INTO access_log (id, user_id, action, created_at) VALUES (?, ?, 'login', ?)",
+      [crypto.randomUUID(), userId, now]
+    );
+    db.run("UPDATE users SET last_login_at = ? WHERE id = ?", [now, userId]);
+    saveDb();
+  } catch {}
+}
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
     Credentials({
@@ -25,6 +38,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           const [id, email, userName] = rows[0].values[0] as string[];
           const adminRow = db.exec("SELECT is_admin FROM users WHERE id = ?", [id]);
           const isAdmin = adminRow.length && adminRow[0].values.length ? adminRow[0].values[0][0] === 1 : false;
+          logAccess(id);
           return { id, email, name: userName, is_admin: isAdmin };
         }
 
@@ -37,6 +51,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         );
         saveDb();
 
+        logAccess(id);
         return { id, email, name, is_admin: false };
       },
     }),
