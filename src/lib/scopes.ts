@@ -327,11 +327,11 @@ export async function listScopes(userId: string): Promise<ScopeDocument[]> {
     return execToObjects(result) as unknown as ScopeDocument[];
   }
 
-  // Non-admins only see scopes where they are a collaborator
+  // All users see all scopes with their collaborator role (or 'editor' by default)
   const result = await db.exec(
-    `SELECT sd.*, sc.role, u.name as owner_name, u.email as owner_email, fo.account_temperature
+    `SELECT sd.*, COALESCE(sc.role, 'editor') as role, u.name as owner_name, u.email as owner_email, fo.account_temperature
      FROM scope_documents sd
-     JOIN scope_collaborators sc ON sc.scope_id = sd.id AND sc.user_id = ?
+     LEFT JOIN scope_collaborators sc ON sc.scope_id = sd.id AND sc.user_id = ?
      JOIN users u ON u.id = sd.owner_id
      LEFT JOIN fleet_overview fo ON fo.scope_id = sd.id
      ORDER BY sd.updated_at DESC`,
@@ -364,12 +364,9 @@ export async function getUserRole(scopeId: string, userId: string): Promise<stri
     [scopeId, userId]
   );
   if (!result.length || !result[0].values.length) {
-    // Check if user is an admin — admins get editor access to all scopes
-    const adminResult = await db.exec("SELECT is_admin FROM users WHERE id = ?", [userId]);
-    if (adminResult.length && adminResult[0].values.length && adminResult[0].values[0][0] === 1) {
-      const exists = await db.exec("SELECT id FROM scope_documents WHERE id = ?", [scopeId]);
-      if (exists.length && exists[0].values.length) return "editor";
-    }
+    // All users default to editor access on all scopes
+    const exists = await db.exec("SELECT id FROM scope_documents WHERE id = ?", [scopeId]);
+    if (exists.length && exists[0].values.length) return "editor";
     return null;
   }
   return result[0].values[0][0] as string;

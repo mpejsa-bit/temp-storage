@@ -6,7 +6,7 @@ import {
   Plus, FileText, Clock, Users, Search, LogOut, MoreVertical,
   Trash2, Copy, ExternalLink, ChevronRight, Layers, ArrowUpDown, Settings,
   Download, ChevronDown, ChevronUp, BarChart3, Activity, AlertTriangle,
-  CheckSquare, Square, X, RefreshCw, Filter, Calendar, Columns
+  CheckSquare, Square, X, RefreshCw, Filter, Calendar, Columns, HelpCircle
 } from "lucide-react";
 import SalesforceSearchModal from "@/components/scope/SalesforceSearchModal";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -54,6 +54,7 @@ export default function DashboardPage() {
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [duplicateWarning, setDuplicateWarning] = useState<{ name: string; match: string; sfData: any | null } | null>(null);
+  const [showHelp, setShowHelp] = useState(false);
 
   // Bulk selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -186,7 +187,14 @@ export default function DashboardPage() {
 
   async function handleDelete() {
     if (!deleteTarget) return;
-    await fetch(`/api/scopes/${deleteTarget.id}`, { method: "DELETE" });
+    const res = await fetch(`/api/scopes/${deleteTarget.id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: "Delete failed" }));
+      toast(err.error || "Delete failed", "error");
+      setDeleteTarget(null);
+      setMenuOpen(null);
+      return;
+    }
     setScopes(scopes.filter(s => s.id !== deleteTarget.id));
     setSelectedIds(prev => { const next = new Set(prev); next.delete(deleteTarget.id); return next; });
     toast(`Deleted "${deleteTarget.fleet_name}"`);
@@ -233,14 +241,19 @@ export default function DashboardPage() {
   async function handleBulkDelete() {
     const ids = Array.from(selectedIds);
     let successCount = 0;
+    const deletedIds: string[] = [];
+    let lastError = "";
     for (const id of ids) {
       try {
         const res = await fetch(`/api/scopes/${id}`, { method: "DELETE" });
-        if (res.ok) successCount++;
+        if (res.ok) { successCount++; deletedIds.push(id); }
+        else { const err = await res.json().catch(() => ({})); lastError = err.error || ""; }
       } catch {}
     }
-    setScopes(prev => prev.filter(s => !selectedIds.has(s.id)));
-    toast(`Deleted ${successCount} document${successCount !== 1 ? "s" : ""}`);
+    setScopes(prev => prev.filter(s => !deletedIds.includes(s.id)));
+    const skipped = ids.length - successCount;
+    if (skipped > 0) toast(`Deleted ${successCount}, skipped ${skipped} (${lastError || "protected"})`, "error");
+    else toast(`Deleted ${successCount} document${successCount !== 1 ? "s" : ""}`);
     setBulkDeleteConfirm(false);
     setSelectedIds(new Set());
   }
@@ -426,6 +439,13 @@ export default function DashboardPage() {
                 Admin
               </button>
             )}
+            <button
+              onClick={() => setShowHelp(true)}
+              className="flex items-center gap-2 text-sm text-[var(--text-muted)] hover:text-[var(--text)] transition"
+              title="Help & Guide"
+            >
+              <HelpCircle className="w-4 h-4" />
+            </button>
             <NotificationBell />
             <ThemeToggle />
             <button
@@ -895,7 +915,7 @@ export default function DashboardPage() {
                             <button onClick={() => handleClone(scope.id)} className="w-full px-4 py-2 text-left text-sm text-[var(--text-secondary)] hover:text-[var(--text)] hover:bg-[var(--bg-secondary)] flex items-center gap-2">
                               <Copy className="w-3.5 h-3.5" /> Clone
                             </button>
-                            {scope.role === "owner" && (
+                            {(scope.status === "draft" || (scope.status === "complete" && isAdmin)) && (
                               <button onClick={() => { setDeleteTarget(scope); setMenuOpen(null); }} className="w-full px-4 py-2 text-left text-sm text-red-400 hover:text-red-300 hover:bg-red-500/5 flex items-center gap-2">
                                 <Trash2 className="w-3.5 h-3.5" /> Delete
                               </button>
@@ -978,14 +998,19 @@ export default function DashboardPage() {
               Export
             </button>
 
-            {/* Delete Selected */}
-            <button
-              onClick={() => setBulkDeleteConfirm(true)}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-400 hover:text-red-300 bg-red-500/5 border border-red-500/20 rounded-lg hover:border-red-500/40 transition"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              Delete
-            </button>
+            {/* Delete Selected — only if all selected are deletable */}
+            {Array.from(selectedIds).every(sid => {
+              const s = scopes.find(sc => sc.id === sid);
+              return s?.status === "draft" || (s?.status === "complete" && isAdmin);
+            }) && (
+              <button
+                onClick={() => setBulkDeleteConfirm(true)}
+                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-400 hover:text-red-300 bg-red-500/5 border border-red-500/20 rounded-lg hover:border-red-500/40 transition"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete
+              </button>
+            )}
 
             <div className="w-px h-6 bg-[var(--border)]" />
 
@@ -1022,6 +1047,331 @@ export default function DashboardPage() {
         onConfirm={handleBulkDelete}
         onCancel={() => setBulkDeleteConfirm(false)}
       />
+
+      {/* Help Guide Modal */}
+      {showHelp && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={() => setShowHelp(false)}>
+          <div
+            className="bg-[var(--bg)] border border-[var(--border)] rounded-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-8 py-5 border-b border-[var(--border)] bg-[var(--bg-secondary)]/50 flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center">
+                  <HelpCircle className="w-5 h-5 text-blue-400" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold">Help & User Guide</h2>
+                  <p className="text-sm text-[var(--text-muted)]">Everything you need to know about Solution Scoping</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowHelp(false)}
+                className="p-2 hover:bg-[var(--bg-secondary)] rounded-lg transition text-[var(--text-muted)] hover:text-[var(--text)]"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="overflow-y-auto flex-1 px-8 py-6 space-y-8">
+
+              {/* Getting Started */}
+              <section>
+                <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                  <span className="w-7 h-7 bg-blue-500/10 rounded-lg flex items-center justify-center text-blue-400 text-sm font-bold">1</span>
+                  Getting Started
+                </h3>
+                <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-6">
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="font-semibold text-sm mb-2 text-blue-400">Creating a New Scope</h4>
+                      <ul className="text-sm text-[var(--text-secondary)] space-y-1.5 ml-4">
+                        <li className="list-disc">Click <span className="font-semibold text-[var(--text)]">&ldquo;New Solutions Document&rdquo;</span> from the dashboard</li>
+                        <li className="list-disc">Enter a fleet name manually, or search and import from <span className="font-semibold text-[var(--text)]">Salesforce</span></li>
+                        <li className="list-disc">Salesforce import pre-fills account details, contacts, and fleet information</li>
+                        <li className="list-disc">Duplicate detection warns you if a similar scope already exists</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-sm mb-2 text-blue-400">Understanding the Dashboard</h4>
+                      <ul className="text-sm text-[var(--text-secondary)] space-y-1.5 ml-4">
+                        <li className="list-disc">All your scopes appear as cards with status, owner, and completion progress</li>
+                        <li className="list-disc">Use the search bar to find scopes by name or owner</li>
+                        <li className="list-disc">Filter by status, account temperature, owner, or date range</li>
+                        <li className="list-disc">Sort by name, last updated, or status</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-sm mb-2 text-blue-400">Status Progression</h4>
+                      <div className="flex items-center gap-3 mt-2 flex-wrap">
+                        <span className="inline-flex items-center px-3 py-1 rounded-lg border text-xs uppercase tracking-wider font-semibold bg-amber-500/10 text-amber-400 border-amber-500/20">Draft</span>
+                        <ChevronRight className="w-4 h-4 text-[var(--text-muted)]" />
+                        <span className="inline-flex items-center px-3 py-1 rounded-lg border text-xs uppercase tracking-wider font-semibold bg-blue-500/10 text-blue-400 border-blue-500/20">Active</span>
+                        <ChevronRight className="w-4 h-4 text-[var(--text-muted)]" />
+                        <span className="inline-flex items-center px-3 py-1 rounded-lg border text-xs uppercase tracking-wider font-semibold bg-emerald-500/10 text-emerald-400 border-emerald-500/20">Complete</span>
+                      </div>
+                      <p className="text-xs text-[var(--text-muted)] mt-2">Scopes auto-advance from Draft to Active at 100% completion. Marking as Complete is a manual action.</p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* Feature Overview */}
+              <section>
+                <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                  <span className="w-7 h-7 bg-blue-500/10 rounded-lg flex items-center justify-center text-blue-400 text-sm font-bold">2</span>
+                  Feature Overview
+                </h3>
+                <p className="text-sm text-[var(--text-muted)] mb-4">Each scope contains the following sections, accessible via tabs within the scope detail view.</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {[
+                    { title: "Start Here / Overview", desc: "Fleet information, account details, executive sponsors, and account temperature rating. This is the primary information hub for the scope." },
+                    { title: "Contacts", desc: "Manage customer contacts with name, title, email, and phone. Supports bulk import from CSV or Salesforce sync." },
+                    { title: "Marketplace Apps", desc: "Browse and select partner solutions from the marketplace catalog. Add custom apps not yet in the catalog." },
+                    { title: "User Provided Apps", desc: "Track the customer's existing technology stack, current vendors, and software they already use." },
+                    { title: "Solution Features", desc: "Define and track solution capabilities, feature requirements, and technical specifications for the deployment." },
+                    { title: "Gaps", desc: "Identify and document gaps between what the solution provides and what the customer requires. Track gap resolution status." },
+                    { title: "Forms", desc: "Track required forms, documents, and paperwork. Monitor completion status of each required form." },
+                    { title: "Install Forecasts", desc: "Plan installation timelines with quantity forecasts by month or quarter. Track projected vs. actual install counts." },
+                    { title: "Workflow Integration", desc: "Map business process workflows showing how the solution integrates with the customer's existing operations." },
+                    { title: "Workflow Technical", desc: "Technical integration details including data flows, API connections, system architecture, and integration points." },
+                    { title: "Workshop Questions", desc: "Prepare discovery workshop questionnaires. Create, organize, and track questions for customer workshops." },
+                    { title: "Training Questions", desc: "Plan training needs and curricula. Document training requirements, schedules, and delivery methods." },
+                  ].map(item => (
+                    <div key={item.title} className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-5">
+                      <h4 className="font-semibold text-sm mb-2 text-blue-400">{item.title}</h4>
+                      <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{item.desc}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {/* Collaboration */}
+              <section>
+                <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                  <span className="w-7 h-7 bg-blue-500/10 rounded-lg flex items-center justify-center text-blue-400 text-sm font-bold">3</span>
+                  Collaboration
+                </h3>
+                <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <h4 className="font-semibold text-sm mb-2 text-blue-400">Sharing Scopes</h4>
+                      <ul className="text-sm text-[var(--text-secondary)] space-y-1.5 ml-4">
+                        <li className="list-disc">Share scopes with team members by searching for their name</li>
+                        <li className="list-disc">Generate share links with configurable access levels</li>
+                        <li className="list-disc">Revoke access at any time from the sharing panel</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-sm mb-2 text-blue-400">Roles & Permissions</h4>
+                      <ul className="text-sm text-[var(--text-secondary)] space-y-1.5 ml-4">
+                        <li className="list-disc"><span className="text-blue-400 font-medium">Owner</span> -- Full control, can delete and manage sharing</li>
+                        <li className="list-disc"><span className="text-emerald-400 font-medium">Editor</span> -- Can edit all scope content</li>
+                        <li className="list-disc"><span className="text-amber-400 font-medium">Viewer</span> -- Read-only access to scope data</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-sm mb-2 text-blue-400">Comments & Mentions</h4>
+                      <ul className="text-sm text-[var(--text-secondary)] space-y-1.5 ml-4">
+                        <li className="list-disc">Add comments on any scope section</li>
+                        <li className="list-disc">Use <span className="font-semibold text-[var(--text)]">@mentions</span> to notify specific team members</li>
+                        <li className="list-disc">Reply to existing comments for threaded discussions</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-sm mb-2 text-blue-400">Notifications</h4>
+                      <ul className="text-sm text-[var(--text-secondary)] space-y-1.5 ml-4">
+                        <li className="list-disc">Real-time presence indicators show who is viewing</li>
+                        <li className="list-disc">Bell icon shows unread notifications</li>
+                        <li className="list-disc">Configure notification preferences per scope</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* Dashboard Features */}
+              <section>
+                <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                  <span className="w-7 h-7 bg-blue-500/10 rounded-lg flex items-center justify-center text-blue-400 text-sm font-bold">4</span>
+                  Dashboard Features
+                </h3>
+                <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <h4 className="font-semibold text-sm mb-2 text-blue-400">Search & Filter</h4>
+                      <ul className="text-sm text-[var(--text-secondary)] space-y-1.5 ml-4">
+                        <li className="list-disc">Full-text search by scope name or owner</li>
+                        <li className="list-disc">Filter by status, account temperature, owner, or creation date</li>
+                        <li className="list-disc">Active filter pills show applied filters at a glance</li>
+                        <li className="list-disc">Sort by name, last updated, or status (ascending/descending)</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-sm mb-2 text-blue-400">Bulk Actions</h4>
+                      <ul className="text-sm text-[var(--text-secondary)] space-y-1.5 ml-4">
+                        <li className="list-disc">Select multiple scopes using checkboxes</li>
+                        <li className="list-disc">Bulk change status (Draft, Active, Complete)</li>
+                        <li className="list-disc">Bulk export selected scopes to CSV</li>
+                        <li className="list-disc">Bulk delete (respects delete permissions)</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-sm mb-2 text-blue-400">Scope Comparison</h4>
+                      <ul className="text-sm text-[var(--text-secondary)] space-y-1.5 ml-4">
+                        <li className="list-disc">Select exactly 2 scopes to enable the Compare button</li>
+                        <li className="list-disc">Side-by-side comparison of all scope sections</li>
+                        <li className="list-disc">Highlights differences between the two scopes</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-sm mb-2 text-blue-400">Analytics Overview</h4>
+                      <ul className="text-sm text-[var(--text-secondary)] space-y-1.5 ml-4">
+                        <li className="list-disc">Toggle the analytics panel for a summary view</li>
+                        <li className="list-disc">Status distribution, average completion rate</li>
+                        <li className="list-disc">Top scope owners and recent activity feed</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* Completion Tracking */}
+              <section>
+                <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                  <span className="w-7 h-7 bg-blue-500/10 rounded-lg flex items-center justify-center text-blue-400 text-sm font-bold">5</span>
+                  Completion Tracking
+                </h3>
+                <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-6 space-y-4">
+                  <div>
+                    <h4 className="font-semibold text-sm mb-2 text-blue-400">How the Progress Bar Works</h4>
+                    <ul className="text-sm text-[var(--text-secondary)] space-y-1.5 ml-4">
+                      <li className="list-disc">Each scope tab has required fields configured by an admin</li>
+                      <li className="list-disc">The progress bar shows the percentage of required fields that have been filled in</li>
+                      <li className="list-disc">Completion is calculated across all tabs combined</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-sm mb-2 text-blue-400">Auto-Status Transitions</h4>
+                    <ul className="text-sm text-[var(--text-secondary)] space-y-1.5 ml-4">
+                      <li className="list-disc"><span className="text-amber-400 font-medium">Draft</span> -- Default status for incomplete scopes</li>
+                      <li className="list-disc"><span className="text-blue-400 font-medium">Active</span> -- Automatically set when completion reaches 100%</li>
+                      <li className="list-disc"><span className="text-emerald-400 font-medium">Complete</span> -- Must be manually set by the user when the scope is finalized</li>
+                    </ul>
+                  </div>
+                </div>
+              </section>
+
+              {/* Delete Permissions */}
+              <section>
+                <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                  <span className="w-7 h-7 bg-blue-500/10 rounded-lg flex items-center justify-center text-blue-400 text-sm font-bold">6</span>
+                  Delete Permissions
+                </h3>
+                <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-6">
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-3">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-lg border text-[10px] uppercase tracking-wider font-semibold bg-amber-500/10 text-amber-400 border-amber-500/20 flex-shrink-0 mt-0.5">Draft</span>
+                      <p className="text-sm text-[var(--text-secondary)]">Any user can delete their own draft scopes. Draft scopes are considered works-in-progress.</p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-lg border text-[10px] uppercase tracking-wider font-semibold bg-blue-500/10 text-blue-400 border-blue-500/20 flex-shrink-0 mt-0.5">Active</span>
+                      <p className="text-sm text-[var(--text-secondary)]">Active scopes cannot be deleted by anyone. They are protected while in use.</p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-lg border text-[10px] uppercase tracking-wider font-semibold bg-emerald-500/10 text-emerald-400 border-emerald-500/20 flex-shrink-0 mt-0.5">Complete</span>
+                      <p className="text-sm text-[var(--text-secondary)]">Only administrators can delete completed scopes, ensuring finalized documents are preserved.</p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* Exporting & Sharing */}
+              <section>
+                <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                  <span className="w-7 h-7 bg-blue-500/10 rounded-lg flex items-center justify-center text-blue-400 text-sm font-bold">7</span>
+                  Exporting & Sharing
+                </h3>
+                <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div>
+                      <h4 className="font-semibold text-sm mb-2 text-blue-400">PDF Export</h4>
+                      <p className="text-sm text-[var(--text-secondary)]">Generate a print-friendly PDF view of any scope. Includes all sections, formatted for professional presentation.</p>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-sm mb-2 text-blue-400">CSV Export</h4>
+                      <p className="text-sm text-[var(--text-secondary)]">Export scope data from the dashboard as CSV. Use &ldquo;Export All&rdquo; for everything or select specific scopes for targeted export.</p>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-sm mb-2 text-blue-400">Share Links</h4>
+                      <p className="text-sm text-[var(--text-secondary)]">Generate shareable links with configurable access levels (view or edit). Revoke links at any time from the scope sharing panel.</p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* Admin Features - conditional on isAdmin */}
+              {isAdmin && (
+                <section>
+                  <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                    <span className="w-7 h-7 bg-blue-500/10 rounded-lg flex items-center justify-center text-blue-400 text-sm font-bold">8</span>
+                    Admin Features
+                  </h3>
+                  <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <h4 className="font-semibold text-sm mb-2 text-blue-400">Completion Configuration</h4>
+                        <ul className="text-sm text-[var(--text-secondary)] space-y-1.5 ml-4">
+                          <li className="list-disc">Configure which fields are required per tab</li>
+                          <li className="list-disc">Changes affect the completion percentage for all scopes</li>
+                          <li className="list-disc">Access from Admin Settings in the header</li>
+                        </ul>
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-sm mb-2 text-blue-400">User Management</h4>
+                        <ul className="text-sm text-[var(--text-secondary)] space-y-1.5 ml-4">
+                          <li className="list-disc">View all registered users</li>
+                          <li className="list-disc">Promote or demote admin privileges</li>
+                          <li className="list-disc">Monitor user activity and last login</li>
+                        </ul>
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-sm mb-2 text-blue-400">Activity Log</h4>
+                        <ul className="text-sm text-[var(--text-secondary)] space-y-1.5 ml-4">
+                          <li className="list-disc">View system-wide activity feed</li>
+                          <li className="list-disc">Track scope creation, edits, shares, and deletions</li>
+                          <li className="list-disc">Filter by user or action type</li>
+                        </ul>
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-sm mb-2 text-blue-400">Deleting Completed Scopes</h4>
+                        <ul className="text-sm text-[var(--text-secondary)] space-y-1.5 ml-4">
+                          <li className="list-disc">Only admins can delete scopes marked as Complete</li>
+                          <li className="list-disc">Provides a safety net for finalized documents</li>
+                          <li className="list-disc">Deletion is permanent and cannot be undone</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              )}
+
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end px-8 py-4 border-t border-[var(--border)] bg-[var(--bg-secondary)]/50 flex-shrink-0">
+              <button
+                onClick={() => setShowHelp(false)}
+                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg transition text-sm"
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Duplicate Scope Warning */}
       {duplicateWarning && (

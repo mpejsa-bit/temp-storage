@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Users, Copy, X, Plus, Trash2, Building2, Phone, ShoppingBag, Puzzle, AlertTriangle, MessageSquare, GraduationCap, ClipboardList, Workflow, Calendar, BarChart3, Check, Link2, Home, Database, Download, ChevronDown, ExternalLink, ChevronRight, HelpCircle, GripVertical, Clock, Send, AtSign, Eye, Printer } from "lucide-react";
+import { ArrowLeft, Users, Copy, X, Plus, Trash2, Building2, Phone, ShoppingBag, Puzzle, AlertTriangle, MessageSquare, GraduationCap, ClipboardList, Workflow, Calendar, BarChart3, Check, CheckCircle, Link2, Home, Database, Download, ChevronDown, ExternalLink, ChevronRight, HelpCircle, GripVertical, Clock, Send, AtSign, Eye, Printer, BookOpen, Rocket, Monitor, Share2, Keyboard, Settings, FileText, Target, Layers, TrendingUp, Search } from "lucide-react";
 import { useDebounce, useDebouncedCallback } from "@/hooks/useDebounce";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { FleetSummary } from "@/components/scope/CrossTabBanner";
@@ -66,6 +66,7 @@ function ContactPhoneInput({val,onChange,dis}) {
 }
 
 const TABS = [
+  { id: "guide", label: "Guide", icon: BookOpen },
   { id: "summary", label: "Start Here", icon: Home },
   { id: "overview", label: "Overview", icon: Building2 },
   { id: "contacts", label: "Contacts", icon: Phone },
@@ -1123,6 +1124,19 @@ export default function ScopePage() {
   const [completionData, setCompletionData] = useState(null);
   const [completionConfig, setCompletionConfig] = useState({});
 
+  const toggleComplete = async () => {
+    const newStatus = data.status === "complete" ? "active" : "complete";
+    const r = await fetch(`/api/scopes/${scopeId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ section: "scope", data: { status: newStatus } }),
+    });
+    if (r.ok) {
+      setData(prev => ({ ...prev, status: newStatus }));
+      toast(`Status changed to ${newStatus}`, "success");
+    }
+  };
+
   const load = useCallback(async()=>{
     const r=await fetch(`/api/scopes/${scopeId}`);
     if(!r.ok){setErr("Not found or no access");setLoading(false);return;}
@@ -1246,9 +1260,15 @@ export default function ScopePage() {
           <button onClick={()=>router.push("/dashboard")} className="flex items-center gap-2 text-sm text-[var(--text-muted)] hover:text-[var(--text)] transition mb-3"><ArrowLeft className="w-4 h-4"/> Dashboard</button>
           <h2 className="font-bold text-[var(--text)] truncate">{data.fleet_name}</h2>
           <div className="flex items-center gap-2 mt-1">
-            <span className={`text-[10px] px-2 py-0.5 rounded border uppercase font-bold ${data.status==="active"?"text-emerald-400 bg-emerald-500/10 border-emerald-500/20":"text-amber-400 bg-amber-500/10 border-amber-500/20"}`}>{data.status}</span>
+            <span className={`text-[10px] px-2 py-0.5 rounded border uppercase font-bold ${data.status==="complete"?"text-blue-400 bg-blue-500/10 border-blue-500/20":data.status==="active"?"text-emerald-400 bg-emerald-500/10 border-emerald-500/20":"text-amber-400 bg-amber-500/10 border-amber-500/20"}`}>{data.status}</span>
             <span className={`text-[10px] font-bold uppercase ${data.role==="owner"?"text-blue-400":data.role==="editor"?"text-emerald-400":"text-amber-400"}`}>{data.role}</span>
           </div>
+          {canEdit && data.status === "active" && (
+            <button onClick={toggleComplete} className="mt-2 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-600/30 transition-colors"><CheckCircle className="w-3.5 h-3.5"/> Mark Complete</button>
+          )}
+          {canEdit && data.status === "complete" && (
+            <button onClick={toggleComplete} className="mt-2 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-amber-600/20 text-amber-400 border border-amber-500/30 rounded-lg hover:bg-amber-600/30 transition-colors"><ArrowLeft className="w-3.5 h-3.5"/> Reopen as Active</button>
+          )}
         </div>
         <nav className="py-2">{TABS.map(t=>{const I=t.icon;const hasChildren=t.children&&t.children.length;const isExpanded=expandedGroups[t.id]||false;const childActive=hasChildren&&t.children.some(c=>c.id===tab);return(
           <div key={t.id}>

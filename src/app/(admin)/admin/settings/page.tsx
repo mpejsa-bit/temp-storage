@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { ArrowLeft, ChevronDown, ChevronRight, Save, Loader2, Shield, Users, Settings, Download, Trash2, ArrowRightLeft, ShieldCheck, ShieldOff, X } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronRight, ChevronLeft, Save, Loader2, Shield, Users, Settings, Download, Trash2, ArrowRightLeft, ShieldCheck, ShieldOff, X, AlertTriangle } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useToast } from "@/components/Toast";
 
@@ -245,6 +245,17 @@ export default function AdminSettingsPage() {
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [activity, setActivity] = useState<ActivityRecord[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
+  const [activityPage, setActivityPage] = useState(1);
+  const [activityTotal, setActivityTotal] = useState(0);
+  const [activityTotalPages, setActivityTotalPages] = useState(1);
+  const ACTIVITY_LIMIT = 50;
+
+  // Clear activity state
+  const [clearFrom, setClearFrom] = useState("");
+  const [clearTo, setClearTo] = useState("");
+  const [clearConfirm, setClearConfirm] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [clearResult, setClearResult] = useState<{ deleted: number } | null>(null);
 
   // User management state
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -309,15 +320,31 @@ export default function AdminSettingsPage() {
 
   /* ── Fetch user activity data ──────────────────────────────── */
 
-  const fetchActivity = useCallback(async () => {
+  const fetchActivity = useCallback(async (page = 1) => {
     setActivityLoading(true);
     try {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(ACTIVITY_LIMIT),
+      });
       const [usersRes, activityRes] = await Promise.all([
         fetch("/api/admin/users", { cache: "no-store" }),
-        fetch("/api/admin/activity", { cache: "no-store" }),
+        fetch(`/api/admin/activity?${params}`, { cache: "no-store" }),
       ]);
       if (usersRes.ok) setUsers(await usersRes.json());
-      if (activityRes.ok) setActivity(await activityRes.json());
+      if (activityRes.ok) {
+        const json = await activityRes.json();
+        // Support both old array format and new paginated format
+        if (Array.isArray(json)) {
+          setActivity(json);
+          setActivityTotal(json.length);
+          setActivityTotalPages(1);
+        } else {
+          setActivity(json.data ?? []);
+          setActivityTotal(json.pagination?.total ?? 0);
+          setActivityTotalPages(json.pagination?.totalPages ?? 1);
+        }
+      }
     } catch {
       // silently fail — tables will show empty
     }
@@ -326,9 +353,9 @@ export default function AdminSettingsPage() {
 
   useEffect(() => {
     if (activeSection === "activity" && isAdmin) {
-      fetchActivity();
+      fetchActivity(activityPage);
     }
-  }, [activeSection, isAdmin, fetchActivity]);
+  }, [activeSection, isAdmin, fetchActivity, activityPage]);
 
   /* ── User management handlers ────────────────────────────────── */
 
@@ -426,6 +453,39 @@ export default function AdminSettingsPage() {
       toast("Network error during transfer", "error");
     }
     setTransferringScope(null);
+  }
+
+  /* ── Clear activity handler ──────────────────────────────────── */
+
+  async function handleClearActivity() {
+    if (!clearFrom || !clearTo) {
+      toast("Please select both from and to dates", "error");
+      return;
+    }
+    setClearing(true);
+    setClearResult(null);
+    try {
+      const res = await fetch("/api/admin/activity", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ from: clearFrom, to: clearTo }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setClearResult({ deleted: data.deleted });
+        toast(`Deleted ${data.deleted} activity log${data.deleted !== 1 ? "s" : ""}`, "success");
+        setClearConfirm(false);
+        // Refresh the activity list
+        setActivityPage(1);
+        fetchActivity(1);
+      } else {
+        const body = await res.json().catch(() => ({}));
+        toast(body.error || "Failed to clear activity", "error");
+      }
+    } catch {
+      toast("Network error clearing activity", "error");
+    }
+    setClearing(false);
   }
 
   /* ── Helpers ────────────────────────────────────────────────── */
@@ -845,14 +905,92 @@ export default function AdminSettingsPage() {
                 </div>
               </section>
 
+              {/* Clear Activity by Date Range */}
+              <section>
+                <h2 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-3">
+                  Clear Activity Logs
+                </h2>
+                <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-5">
+                  <p className="text-sm text-[var(--text-secondary)] mb-4">
+                    Delete activity log entries within a date range. This action cannot be undone.
+                  </p>
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">From</label>
+                      <input
+                        type="date"
+                        value={clearFrom}
+                        onChange={(e) => { setClearFrom(e.target.value); setClearResult(null); setClearConfirm(false); }}
+                        className="px-3 py-1.5 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-[var(--text)] text-sm focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">To</label>
+                      <input
+                        type="date"
+                        value={clearTo}
+                        onChange={(e) => { setClearTo(e.target.value); setClearResult(null); setClearConfirm(false); }}
+                        className="px-3 py-1.5 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-[var(--text)] text-sm focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    {!clearConfirm ? (
+                      <button
+                        onClick={() => {
+                          if (!clearFrom || !clearTo) {
+                            toast("Please select both from and to dates", "error");
+                            return;
+                          }
+                          if (clearFrom > clearTo) {
+                            toast("From date must be before To date", "error");
+                            return;
+                          }
+                          setClearConfirm(true);
+                        }}
+                        disabled={!clearFrom || !clearTo}
+                        className="flex items-center gap-2 px-4 py-1.5 bg-red-600 hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Clear Activity
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 text-amber-400 text-xs">
+                          <AlertTriangle className="w-4 h-4" />
+                          Are you sure?
+                        </div>
+                        <button
+                          onClick={handleClearActivity}
+                          disabled={clearing}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors"
+                        >
+                          {clearing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                          {clearing ? "Deleting..." : "Yes, Delete"}
+                        </button>
+                        <button
+                          onClick={() => setClearConfirm(false)}
+                          className="px-3 py-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  {clearResult && (
+                    <div className="mt-3 text-sm text-green-400">
+                      Successfully deleted {clearResult.deleted} activity log{clearResult.deleted !== 1 ? "s" : ""}.
+                    </div>
+                  )}
+                </div>
+              </section>
+
               {/* Recent activity log */}
               <section>
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
-                    Recent Activity
+                    Recent Activity ({activityTotal} total)
                   </h2>
                   <a
-                    href="/api/admin/activity?format=csv"
+                    href="/api/admin/activity?format=csv&limit=10000"
                     download
                     className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text)] bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg hover:border-blue-500/40 transition-colors"
                   >
@@ -910,6 +1048,31 @@ export default function AdminSettingsPage() {
                       </tbody>
                     </table>
                   </div>
+
+                  {/* Pagination */}
+                  {activityTotalPages > 1 && (
+                    <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--border)]">
+                      <span className="text-xs text-[var(--text-muted)]">
+                        Page {activityPage} of {activityTotalPages}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => setActivityPage((p) => Math.max(1, p - 1))}
+                          disabled={activityPage <= 1}
+                          className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setActivityPage((p) => Math.min(activityTotalPages, p + 1))}
+                          disabled={activityPage >= activityTotalPages}
+                          className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </section>
             </>

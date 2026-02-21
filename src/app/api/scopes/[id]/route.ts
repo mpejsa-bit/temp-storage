@@ -317,11 +317,15 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       );
       const configuredTotal = configuredTabs.reduce((s, [, t]) => s + t.total, 0);
       const configuredFilled = configuredTabs.reduce((s, [, t]) => s + t.filled, 0);
-      // Status: complete only when ALL configured requirements are met,
-      // draft until at least some configured requirements are filled
-      const newStatus = configuredTotal > 0 && configuredFilled >= configuredTotal
+      // Status: active at 100%, draft below 100%. "complete" is manual only.
+      const pct = configuredTotal > 0 ? (configuredFilled / configuredTotal) * 100 : 0;
+      const currentScopeCheck = await getScope(id) as any;
+      // Don't auto-downgrade a manually completed scope
+      const newStatus = currentScopeCheck?.status === "complete"
         ? "complete"
-        : "draft";
+        : pct >= 100
+          ? "active"
+          : "draft";
 
       // Check if status actually changed and notify collaborators
       const currentScopeForStatus = await getScope(id) as any;
@@ -363,7 +367,18 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
 
   const { id } = params;
   const role = await getUserRole(id, session.user.id);
-  if (role !== "owner") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!role) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  // Delete rules: draft = anyone, active = no one, complete = admin only
+  const scopeToDelete = await getScope(id) as any;
+  if (scopeToDelete?.status === "active") {
+    return NextResponse.json({ error: "Active scopes cannot be deleted." }, { status: 400 });
+  }
+  if (scopeToDelete?.status === "complete") {
+    if (!(session.user as any).is_admin) {
+      return NextResponse.json({ error: "Only admins can delete completed scopes." }, { status: 403 });
+    }
+  }
 
   await deleteScope(id);
   buildActivityMeta(id).then(m => logActivity(session.user.id, "delete_scope", m)).catch(() => {});

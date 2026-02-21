@@ -253,7 +253,7 @@ function initSqliteSchema(db: Database) {
       id TEXT PRIMARY KEY,
       owner_id TEXT NOT NULL REFERENCES users(id),
       fleet_name TEXT NOT NULL DEFAULT 'New Fleet',
-      status TEXT DEFAULT 'draft' CHECK(status IN ('draft','active','archived')),
+      status TEXT DEFAULT 'draft' CHECK(status IN ('draft','active','complete','archived')),
       share_token TEXT UNIQUE,
       share_access TEXT DEFAULT 'disabled' CHECK(share_access IN ('disabled','viewer','restricted')),
       sf_opportunity_id TEXT,
